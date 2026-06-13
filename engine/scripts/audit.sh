@@ -9,7 +9,7 @@
 #                     plus un override possible via le manifeste docs/.relay-version :
 #                       AUDIT_BACKEND_GLOBS="rel/path1 rel/path2"   (dossiers à scanner)
 #                       AUDIT_WEB_GLOBS="rel/path"
-#   Aucun chemin AgriConnect.* / cookie projet en dur : la version driftée est neutralisée.
+#   Aucun chemin ni nom de projet en dur : cibles auto-découvertes, overridables par env.
 
 set -uo pipefail
 TARGET=${1:-all}

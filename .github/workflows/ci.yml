@@ -1,0 +1,49 @@
+name: RELAY CI
+
+# Protège le moteur canonique : une PR ne doit ni casser les scripts, ni glisser une
+# identité de projet dans le moteur, ni produire un bootstrap invalide.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  engine-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1. ShellCheck — les ERREURS bloquent (warnings/style tolérés pour l'instant).
+      - name: ShellCheck (severity=error)
+        run: shellcheck --severity=error engine/scripts/*.sh bin/*.sh
+
+      # 2. Pureté du moteur — aucune identité de projet en dur (principe anti-drift).
+      - name: Engine purity (no project identity hardcoded)
+        run: |
+          if grep -rniE 'agriconnect|tempow|deepmanag' engine/ bin/; then
+            echo "::error::Identité de projet en dur dans le moteur — un fichier engine/ ou bin/ ne doit contenir AUCUNE donnée de projet."
+            exit 1
+          fi
+          echo "✅ moteur project-agnostic"
+
+      # 3. Smoke test — bootstrap un projet jetable puis valide qu'il tourne.
+      - name: Smoke test (relay-init bootstrap + relay-check)
+        run: |
+          set -euo pipefail
+          FIX="$(mktemp -d)"
+          cd "$FIX"
+          git init -q
+          git config user.email ci@relay.test
+          git config user.name "RELAY CI"
+          "$GITHUB_WORKSPACE/bin/relay-init.sh" \
+            --project-name CITest --stack "Node+Express" --lang "JS" \
+            --domain "todo" --actors "user,admin" --llm generic
+          # relay-check doit s'exécuter et produire un Health Score (sans --strict → exit 0 attendu).
+          ./docs/scripts/relay-check.sh > out.txt 2>&1 || true
+          grep -q "Health Score" out.txt || { echo "::error::relay-check n'a pas produit de Health Score"; cat out.txt; exit 1; }
+          # Aucun placeholder {{...}} ne doit subsister après le bootstrap.
+          if grep -rl '{{' . --include='*.md' | grep -v out.txt; then
+            echo "::error::placeholder {{...}} non substitué après relay-init"; exit 1
+          fi
+          echo "✅ bootstrap + relay-check OK"

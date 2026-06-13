@@ -72,7 +72,7 @@ if [ -f "$LOG" ]; then
   if [ -n "$LAST_HEADER" ]; then
     # Extraire date + titre (tout ce qui est après la date)
     LAST_DATE=$(echo "$LAST_HEADER" | cut -d' ' -f1)
-    LAST_TITLE=$(echo "$LAST_HEADER" | sed "s/^$LAST_DATE[[:space:]]*—[[:space:]]*//" | cut -c1-60)
+    LAST_TITLE=$(echo "$LAST_HEADER" | sed "s/^${LAST_DATE}[[:space:]]*—[[:space:]]*//" | cut -c1-60)
     LAST_SESSION="$LAST_DATE — $LAST_TITLE"
   fi
 fi
