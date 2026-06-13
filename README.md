@@ -136,7 +136,8 @@ humaine), la discipline moteur/instance, et comment tester une modif.
 
 ## Licence
 
-À définir par l'auteur (suggestion : MIT pour un outil destiné à être testé/forké). _TODO._
+[MIT](LICENSE) — usage/modification/redistribution libres (y compris commerciaux), garder la
+mention de copyright, fourni « tel quel » sans garantie.
 
 ## `docs/.relay-version` (manifeste d'instance)
 
