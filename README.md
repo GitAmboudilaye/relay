@@ -1,89 +1,148 @@
-# RELAY — moteur canonique
+# RELAY
 
-> Moteur de relais inter-sessions LLM, **versionné et séparé des données d'instance**.
-> Un projet consomme ce moteur via `relay-init.sh` (bootstrap) puis le met à jour via
-> `relay-update.sh` (propagation). Le moteur est **copié** aux chemins `docs/scripts/` et
-> `docs/rules/` du projet (pas de submodule) → toutes les références `./docs/scripts/relay-*.sh`
-> restent valides.
+> **Protocole de relais inter-sessions pour agents LLM.** Permet à des sessions LLM successives —
+> **sans mémoire partagée** — de travailler sur un même projet brownfield comme une équipe stable :
+> reprendre l'état réel, ne rien casser, ne pas réinventer, laisser le projet repartable en < 10 min.
 
-## Quoi / Pourquoi
+État : **v1.1.0** · éprouvé sur **2 projets** (AgriConnect, où RELAY est né, et Tempow/DeepManagment) ·
+moteur portable propagé par script. Lis **[Forces & Limites](#forces--limites-lecture-honnête)** avant de te faire une idée.
 
-RELAY permet à des sessions LLM successives **sans mémoire partagée** de travailler sur un même
-projet brownfield comme une équipe stable : reprendre l'état réel (MRS), ne rien casser
-(Regression/Design-System Shields), ne pas réinventer, et laisser le projet repartable en < 10 min.
+---
 
-Avant ce repo, le moteur était **copié-collé** entre projets et les copies **divergeaient**
-(ex. `audit.sh` hardcodait un ancien nom de projet). Ici, **moteur** (portable) et **instance**
-(propre au projet) sont séparés ; la propagation est un script, pas un copier-coller manuel.
+## Le problème
 
-## Arborescence
+Un agent LLM démarre chaque session **sans mémoire** de la précédente. Sur un projet réel (brownfield,
+non documenté), ça produit : du travail refait, des régressions réintroduites, des décisions oubliées,
+des règles métier inventées. RELAY externalise l'état dans des **fichiers texte versionnés** et impose
+un **protocole d'ouverture/clôture** + des **garde-fous exécutables** (`relay-check.sh`).
 
-```
-relay/
-├── engine/
-│   ├── scripts/   # relay-check.sh, relay-brief.sh, relay-stats.sh, stale-detector.sh, audit.sh
-│   └── rules/     # RELAY_PROTOCOL.md, RELAY_METRICS.md, RELAY_RULE_POOL.md
-├── templates/     # graines des fichiers d'instance (placeholders {{PROJECT_NAME}}, {{STACK}}…)
-├── bin/
-│   ├── relay-init.sh    # BOOTSTRAP d'un nouveau projet
-│   └── relay-update.sh  # PROPAGATION du moteur dans un projet existant
-├── VERSION              # version sémantique du moteur (ex. 1.0.0)
-└── README.md
-```
+## Ce que RELAY fait concrètement
 
-## Classification MOTEUR vs INSTANCE
+- **MRS (Memory Reconciliation Step)** : tout fait hérité d'une session passée est `[assumed]` jusqu'à
+  re-vérification (`grep`/`build`/exécution) → on ne planifie jamais sur du non-vérifié.
+- **Ancrage métier obligatoire** : avant toute logique métier, écrire acteur / réalité terrain / cas
+  limites (dont IDOR multi-tenant). `relay-check.sh` **bloque** le commit si l'ancrage manque.
+- **Escalade métier** : une règle métier absente/ambiguë → `ESCALADE_METIER:` dans la tâche + **arrêt**.
+  Commit bloqué tant que `REPONSE_HUMAINE:` n'est pas fournie. On ne devine pas une règle de paie/RGPD.
+- **Health Score + label honnête** : `relay-check.sh` note l'hygiène de passation ; le label « Sain »
+  est **gaté** tant qu'un P0/P1 sécurité est ouvert (un score vert ne ment pas sur la dette critique).
+- **Anti-inflation (pool candidat)** : une règle proposée reste *candidate* ; elle ne rejoint le
+  protocole qu'au **2ᵉ déclencheur indépendant + validation humaine**. Empêche le protocole de gonfler.
+- **Niveaux de confiance** : `[verified-run]` (exécuté) > `[verified-build]` (compilé/lu) — un fix
+  sécurité « build-only » est signalé, pas maquillé.
 
-| Catégorie | Fichiers | Propagé par `relay-update.sh` ? |
-|---|---|---|
-| **MOTEUR** | `engine/scripts/*.sh`, `engine/rules/RELAY_PROTOCOL.md` (§0-§7 portables ; §8 = pointeur statique) | ✅ oui — écrasé à chaque update |
-| **INSTANCE** | `NEXT_SESSION.md`, `CLAUDE.md`/`SYSTEM.md`/…, `docs/context/*`, `docs/rules/{KNOWN_ISSUES,*_ARCHITECTURE}.md` | ❌ jamais touché |
-| **TEMPLATE (seed-once)** | `templates/*` — dont `docs/rules/{RELAY_METRICS,RELAY_RULE_POOL}.md` | déposés **au bootstrap uniquement**, jamais en update |
+## Démarrage rapide
 
-> **Principe de sûreté de la propagation : un fichier moteur ne contient AUCUNE donnée de projet.**
-> Les **compteurs** de `RELAY_METRICS.md §0` et le **registre** human-gated de `RELAY_RULE_POOL.md`
-> sont des données d'instance → ils sont des **templates seed-once** (posés une fois par `relay-init`,
-> ensuite propriété du projet), **jamais** propagés. La **logique** de scoring/anti-inflation, elle,
-> vit dans `relay-check.sh` (moteur) et se propage. Ainsi un `update` ne peut écraser aucune donnée projet.
-
-## Usage
-
-### Bootstrap d'un nouveau projet
+### Installer RELAY sur un **nouveau** projet (bootstrap)
 
 ```bash
+git clone https://github.com/GitAmboudilaye/relay ~/relay     # le canonique
 cd /chemin/vers/mon-projet
-/chemin/vers/relay/bin/relay-init.sh \
+~/relay/bin/relay-init.sh \
   --project-name MonProjet --stack "FastAPI+React" --lang "Python/TS" \
   --domain "marketplace" --actors "acheteur,vendeur,admin" --llm gpt
 ```
 
-Effets : copie le moteur dans `docs/scripts/` + `docs/rules/`, génère les fichiers d'instance
-depuis `templates/`, écrit `docs/.relay-version`, installe le hook pre-commit.
-**N'écrase jamais** un fichier d'instance déjà présent.
+Effets : copie le moteur dans `docs/scripts/` + `docs/rules/`, génère les fichiers d'instance depuis
+`templates/`, écrit `docs/.relay-version`, installe le hook pre-commit. **N'écrase jamais** un fichier
+d'instance déjà présent. Ensuite : remplis `CLAUDE.md` (ou `SYSTEM.md`) + `docs/context/RELAY_PROJECT_DNA.md`.
 
-### Propagation d'un fix moteur
+### Mettre à jour le moteur (propager les corrections)
 
 ```bash
 cd /chemin/vers/mon-projet
-RELAY_CANONICAL=/chemin/vers/relay ./docs/scripts/relay-update.sh
+./docs/scripts/relay-update.sh        # clone/pull le canonique, copie le MOTEUR seul
 ```
 
 Localisation du canonique : `$RELAY_CANONICAL` → cache `~/.relay/canonical` (clone/pull depuis
-`CANONICAL_URL` de `docs/.relay-version`) → chemin local → sinon erreur explicite.
-Copie **uniquement** les fichiers moteur, met à jour `.relay-version`, ne touche **aucun** fichier
-d'instance, et imprime le diff (fichiers changés + `ancienne → nouvelle` version).
+`CANONICAL_URL` de `docs/.relay-version`) → chemin local → sinon erreur explicite. La mise à jour
+**ne touche aucun fichier d'instance** et imprime le diff (`ancienne → nouvelle` version).
 
-### Détection de skew (signal-only)
+### Utiliser RELAY dans une session (la boucle quotidienne)
 
-`relay-check.sh` compare la version moteur installée (`docs/.relay-version`) à la `VERSION` du
-canonique localisable et émet un avertissement « moteur vN en retard sur canonique vM → lance
-relay-update.sh ». **N'altère ni le Health Score ni l'exit code.** No-op si le canonique est
-introuvable.
+```bash
+./docs/scripts/relay-brief.sh     # Senior Brief — 10 lignes, l'état en 30 s
+./docs/scripts/relay-check.sh     # Health Score + garde-fous (validation NEXT_SESSION.md)
+./docs/scripts/relay-stats.sh     # vélocité, bugs vs features (depuis git)
+./docs/scripts/relay-split.sh     # fractionne NEXT_SESSION.md s'il dépasse 150 lignes
+```
+
+Le protocole complet (MRS, règle des 70 %, format des tâches, clôture) → `docs/rules/RELAY_PROTOCOL.md`.
+
+## Architecture : MOTEUR / INSTANCE / TEMPLATE
+
+```
+relay/
+├── engine/
+│   ├── scripts/   # relay-check, relay-brief, relay-stats, stale-detector, relay-split, audit
+│   └── rules/     # RELAY_PROTOCOL.md  (§0-§7 portables, §8 = pointeur statique)
+├── templates/     # graines des fichiers d'instance ({{PLACEHOLDERS}})
+├── bin/           # relay-init.sh (bootstrap) · relay-update.sh (propagation)
+├── docs/          # VISION.md, FRAMEWORK_SPEC.md (réf. du framework, NON propagées)
+└── VERSION
+```
+
+| Catégorie | Fichiers | Propagé par `relay-update.sh` ? |
+|---|---|---|
+| **MOTEUR** | `engine/scripts/*.sh`, `engine/rules/RELAY_PROTOCOL.md` | ✅ écrasé à chaque update |
+| **INSTANCE** | `NEXT_SESSION.md`, `CLAUDE.md`, `docs/context/*`, `docs/rules/{KNOWN_ISSUES,*_ARCHITECTURE}.md` | ❌ jamais touché |
+| **TEMPLATE (seed-once)** | `templates/*` — dont `RELAY_METRICS.md`, `RELAY_RULE_POOL.md` | déposé au bootstrap, jamais en update |
+
+> **Règle de sûreté : un fichier MOTEUR ne contient AUCUNE donnée de projet.** C'est ce qui garantit
+> qu'une mise à jour ne peut **jamais écraser** tes données (compteurs, registre de règles, KI, état).
+> Prouvé par test : un `update` qui change le protocole laisse `NEXT_SESSION`, `KNOWN_ISSUES` et le
+> registre de règles **intacts**.
+
+## Forces & Limites (lecture honnête)
+
+> RELAY est un outil utile, pas une garantie magique. Lis ceci avant de l'adopter — pour éviter
+> les illusions.
+
+**Forces (observées) :**
+- Résout réellement la perte de contexte inter-sessions : l'état vit en texte versionné, pas dans la
+  mémoire volatile d'un agent.
+- Les garde-fous **tirent vraiment** : le label « Sain » gaté a révélé des P0 sous-comptés ; l'escalade
+  métier a forcé une vraie décision d'auth avant un fix risqué ; le pool anti-inflation freine la dérive.
+- Discipline brownfield (`[assumed]→[verified]`, MRS) qui empêche de bâtir sur du faux.
+- L'ancrage métier empêche un agent d'**inventer** une règle métier sensible (paie, RGPD, facturation).
+- Portable : moteur canonique + propagation par script ; les corrections atteignent tous les projets
+  sans copier-coller (le mode de fonctionnement *avant* ce repo, qui faisait diverger les copies).
+
+**Limites (à connaître pour ne pas surpromettre) :**
+- 🟠 **« LLM-agnostique » est REVENDIQUÉ, pas prouvé.** RELAY n'a été exécuté **qu'avec Claude**.
+  Aucune session réelle sous GPT/Gemini/Llama/autre. La portabilité multi-LLM est une **hypothèse**,
+  pas un fait. → c'est la contribution la plus utile qu'on puisse apporter (voir CONTRIBUTING).
+- 🟠 **N=2, même auteur, stack proche.** Éprouvé sur 2 projets du même auteur (ASP.NET + Flutter).
+  Aucune preuve cross-équipe / cross-stack / cross-domaine.
+- 🟠 **Les gates réduisent le risque, ils ne le suppriment pas.** Un agent *peut* écrire `[verified-run]`
+  sans rien exécuter, bâcler un ancrage, ou contourner par `--no-verify`. RELAY rend la triche **visible
+  et coûteuse** ; il ne l'empêche pas mécaniquement. La qualité dépend de l'honnêteté de l'agent + de
+  la vigilance humaine.
+- 🔴 **Pas un substitut aux tests / à la CI.** `[verified-run]` est un *label de discipline*, pas de la
+  couverture. RELAY ne lance pas tes tests, ne build pas, ne déploie rien.
+- 🟠 **Le Health Score mesure l'hygiène de passation** (+ un peu de fond via le gating P0/P1), **pas la
+  santé du produit.** 97/100 peut coexister avec un produit cassé.
+- 🟠 **Rien ne force l'exécution du protocole.** Si une session n'ouvre pas `relay-brief.sh` ou saute le
+  MRS, RELAY ne sert à rien. C'est un protocole, pas un runtime.
+- ⚪ **Jeune (v1.1), bash + Markdown, français-centré.** Le modèle de propagation est récent ; angles
+  connus dans le backlog (cf. `docs/rules/RELAY_FRAMEWORK_BACKLOG.md` chez un consommateur). i18n absente.
+
+## Contribuer
+
+RELAY se durcit par l'usage. La contribution la plus précieuse : **le faire tourner sous un LLM non-Claude**
+et rapporter ce qui casse (cf. limite #1). Voir **[CONTRIBUTING.md](CONTRIBUTING.md)** pour le modèle
+anti-inflation (toute nouvelle règle entre comme *candidate*, promue au 2ᵉ déclencheur + validation
+humaine), la discipline moteur/instance, et comment tester une modif.
+
+## Licence
+
+À définir par l'auteur (suggestion : MIT pour un outil destiné à être testé/forké). _TODO._
 
 ## `docs/.relay-version` (manifeste d'instance)
 
 ```
-1.0.0
+1.1.0
 PROJECT=MonProjet
-CANONICAL_URL=/home/me/projects/relay   # chemin local ou URL git
+CANONICAL_URL=https://github.com/GitAmboudilaye/relay.git
 INSTALLED=2026-06-12
 ```
