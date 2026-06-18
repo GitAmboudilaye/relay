@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# relay-check.sh v3.5 — Validation structure + contenu + commits + clôture NEXT_SESSION.md
+# relay-check.sh v3.6 — Validation structure + contenu + commits + clôture NEXT_SESSION.md
+# + Porte de reçu (v1.2.0) : `[verified-run:<hash>]` exige un reçu relay-run.sh existant (sinon ERREUR)
 # + Skew check (signal-only) : alerte si moteur d'instance < canonique localisable
 # + Design System Shield (Flutter AppColors/AppRadius/AppSpacing + CSS var(--ac-*))
 # + Branch Guard (avertissement si commit direct sur main/develop avec .cs/.dart)
@@ -314,7 +315,8 @@ TASK_LINES=$(grep -E "^TASK\[" "$FILE" 2>/dev/null || true)
 # Legacy exact : `[verified]` (sans suffixe -build/-run)
 VERIFIED_LEGACY=$(echo "$TASK_LINES" | grep -cF "[verified]" 2>/dev/null || true)
 VERIFIED_BUILD=$(echo "$TASK_LINES" | grep -cF "[verified-build]" 2>/dev/null || true)
-VERIFIED_RUN=$(echo "$TASK_LINES" | grep -cF "[verified-run]" 2>/dev/null || true)
+# Compte les deux formes : `[verified-run]` nu ET `[verified-run:<hash>]` adossé à un reçu.
+VERIFIED_RUN=$(echo "$TASK_LINES" | grep -cE "\[verified-run(:[a-f0-9]+)?\]" 2>/dev/null || true)
 ASSUMED=$(echo  "$TASK_LINES" | grep -cF "[assumed]"  2>/dev/null || true)
 STALE=$(echo   "$TASK_LINES" | grep -cF "[stale?]"   2>/dev/null || true)
 
@@ -326,6 +328,33 @@ ASSUMED=${ASSUMED:-0}
 STALE=${STALE:-0}
 # Numérateur confiance = tout ce qui est vérifié (legacy + build + run).
 VERIFIED=$(( VERIFIED_LEGACY + VERIFIED_BUILD + VERIFIED_RUN ))
+
+# ── 4a. Porte de reçu (TASK[RELAY-RUN-RECEIPT], v1.2.0) ──────────────────────
+# `[verified-run:<hash>]` = revendication de preuve ADOSSÉE à un reçu relay-run.sh.
+#   → le reçu docs/.relay/receipts/<hash>.log DOIT exister, sinon ERREUR (preuve falsifiée).
+# `[verified-run]` nu (sans hash) = legacy/opt-in : toléré, warning signal-only « non adossé ».
+# Rétrocompat : une instance sans aucun reçu (que des run nus) PASSE — le reçu n'est requis
+# que pour les claims qui CITENT explicitement un hash.
+RECEIPT_DIR="docs/.relay/receipts"
+CITED_RUNS=$(echo "$TASK_LINES" | grep -oE "\[verified-run:[a-f0-9]+\]" 2>/dev/null || true)
+BARE_RUNS=$(echo "$TASK_LINES" | grep -cE "\[verified-run\]" 2>/dev/null || true)
+BARE_RUNS=${BARE_RUNS:-0}
+if [ -n "$CITED_RUNS" ]; then
+  while IFS= read -r cited; do
+    [ -z "$cited" ] && continue
+    rhash=$(echo "$cited" | sed -E 's/\[verified-run:([a-f0-9]+)\]/\1/')
+    if [ -f "$RECEIPT_DIR/$rhash.log" ]; then
+      $SCORE_ONLY || echo "[RELAY] ✅ [verified-run:$rhash] adossé à un reçu"
+    else
+      $SCORE_ONLY || echo "[RELAY] ❌ [verified-run:$rhash] cite un reçu INTROUVABLE ($RECEIPT_DIR/$rhash.log) — preuve falsifiée ou reçu non committé/perdu"
+      ERRORS=$((ERRORS + 1))
+    fi
+  done <<< "$CITED_RUNS"
+fi
+if [ "$BARE_RUNS" -gt 0 ]; then
+  $SCORE_ONLY || echo "[RELAY] ⚠️  $BARE_RUNS [verified-run] nu(s) (sans :hash) — non adossé(s) à un reçu relay-run.sh ; preuve revendiquée mais non prouvable (signal-only)"
+  WARNINGS=$((WARNINGS + 1))
+fi
 
 if [ "$TOTAL_TASKS" -gt 0 ]; then
   TRUST_DENOM=$(( VERIFIED + ASSUMED + STALE ))

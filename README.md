@@ -114,16 +114,23 @@ relay/
   pas un fait. → c'est la contribution la plus utile qu'on puisse apporter (voir CONTRIBUTING).
 - 🟠 **N=2, même auteur, stack proche.** Éprouvé sur 2 projets du même auteur (ASP.NET + Flutter).
   Aucune preuve cross-équipe / cross-stack / cross-domaine.
-- 🟠 **Les gates réduisent le risque, ils ne le suppriment pas.** Un agent *peut* écrire `[verified-run]`
-  sans rien exécuter, bâcler un ancrage, ou contourner par `--no-verify`. RELAY rend la triche **visible
-  et coûteuse** ; il ne l'empêche pas mécaniquement. La qualité dépend de l'honnêteté de l'agent + de
-  la vigilance humaine.
+- 🟠 **Les gates réduisent le risque, ils ne le suppriment pas.** Un agent *peut* bâcler un ancrage ou
+  contourner par `--no-verify`. RELAY rend la triche **visible et coûteuse** ; il ne l'empêche pas
+  mécaniquement. La qualité dépend de l'honnêteté de l'agent + de la vigilance humaine.
+  *Depuis v1.2.0, `[verified-run]` peut être **adossé à une preuve** : `relay-run.sh "<cmd>"` émet un
+  reçu (stdout/stderr/exit-code) et `relay-check.sh` **rejette** un `[verified-run:<hash>]` dont le reçu
+  est introuvable. La triche par run cité devient donc fabriquée, pas seulement affirmée. Reste opt-in :
+  un `[verified-run]` **nu** est encore toléré (warning), donc l'honnêteté reste requise pour les claims
+  non adossés.*
 - 🔴 **Pas un substitut aux tests / à la CI.** `[verified-run]` est un *label de discipline*, pas de la
   couverture. RELAY ne lance pas tes tests, ne build pas, ne déploie rien.
 - 🟠 **Le Health Score mesure l'hygiène de passation** (+ un peu de fond via le gating P0/P1), **pas la
   santé du produit.** 97/100 peut coexister avec un produit cassé.
 - 🟠 **Rien ne force l'exécution du protocole.** Si une session n'ouvre pas `relay-brief.sh` ou saute le
-  MRS, RELAY ne sert à rien. C'est un protocole, pas un runtime.
+  MRS, RELAY ne sert à rien. C'est un protocole, pas un runtime. *(v1.2.0 amorce le glissement : `relay-run.sh`
+  + la porte de reçu apportent une preuve mécanique sur `[verified-run]` ; l'auto-déclenchement par hooks
+  reste hors core — voir backlog T1, volontairement non livré car spécifique à Claude Code, donc en tension
+  avec l'agnosticité revendiquée.)*
 - ⚪ **Jeune (v1.1), bash + Markdown, français-centré.** Le modèle de propagation est récent ; angles
   connus dans le backlog (cf. `docs/rules/RELAY_FRAMEWORK_BACKLOG.md` chez un consommateur). i18n absente.
 
