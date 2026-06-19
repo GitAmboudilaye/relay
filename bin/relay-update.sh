@@ -138,6 +138,35 @@ if $CHECK_ONLY; then
   exit 0
 fi
 
+# ── 1c. Self-update bootstrapping (§1b) — stage 1 → re-exec stage 2 ────────────
+# relay-update.sh vit dans bin/ (canonique) et docs/scripts/ (consommateur, déposé
+# par relay-init). La boucle de copie (§2) ne propage QUE engine/scripts/*.sh →
+# relay-update ne se met PAS à jour lui-même. Sans ce correctif, un consommateur
+# lance son ANCIEN docs/scripts/relay-update.sh : il copie bien le moteur récent,
+# mais exécute son ancienne logique de migration (rules.conf non seedé, etc.).
+# Correctif (décision user 2026-06-18 : « self-update stage 1 → re-exec stage 2 ») :
+# stage 1 copie le nouveau relay-update SUR le script courant, puis re-exec stage 2
+# qui rejoue la migration AVEC la logique à jour → correct en UN seul run.
+#   • Sauté en --check (déjà sorti plus haut — lecture seule).
+#   • Jamais quand on tourne DEPUIS le canonique (bin/) : on n'écrase pas la source.
+#   • Idempotent : si le script courant == canonique (cmp -s) → rien (pas de boucle).
+#   • Garde anti-boucle : RELAY_SELFUPDATE_STAGE2=1 sur le re-exec → un seul saut.
+# Ce bloc est un compound command unique : bash l'a entièrement parsé avant de
+# l'exécuter, donc réécrire $0 puis exec immédiatement est sûr (rien n'est relu
+# depuis le fichier modifié après le exec qui remplace le process).
+RUNNING_SCRIPT="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+CANON_UPDATE="$CANON_ROOT/bin/relay-update.sh"
+if [ "${RELAY_SELFUPDATE_STAGE2:-0}" != "1" ] \
+   && [ -f "$CANON_UPDATE" ] \
+   && [ "$RUNNING_SCRIPT" != "$CANON_UPDATE" ] \
+   && ! cmp -s "$CANON_UPDATE" "$RUNNING_SCRIPT"; then
+  echo "[RELAY-UPDATE] 🔄 Self-update : relay-update.sh est obsolète → copie de la version"
+  echo "[RELAY-UPDATE]    canonique puis relance avec la logique de migration à jour."
+  cp "$CANON_UPDATE" "$RUNNING_SCRIPT"
+  chmod +x "$RUNNING_SCRIPT" 2>/dev/null || true
+  RELAY_SELFUPDATE_STAGE2=1 exec "$RUNNING_SCRIPT" "$@"
+fi
+
 ENGINE_SCRIPTS="$CANON_ROOT/engine/scripts"
 ENGINE_RULES="$CANON_ROOT/engine/rules"
 for d in "$ENGINE_SCRIPTS" "$ENGINE_RULES"; do

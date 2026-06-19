@@ -11,6 +11,22 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.6.0] — 2026-06-19
+
+### Fixed
+- **Self-update bootstrapping de `relay-update.sh` (angle mort §1b)** : le script de mise à jour
+  ne se propageait pas lui-même (la boucle de copie ne traite que `engine/scripts/*.sh`, or
+  `relay-update.sh` vit dans `bin/`). Un consommateur lançant son ancien
+  `docs/scripts/relay-update.sh` copiait le moteur récent mais rejouait son **ancienne** logique
+  de migration (`rules.conf` non seedé, shields inactifs jusqu'à un 2ᵉ run).
+
+### Added
+- `relay-update.sh` : étage de **self-update « stage 1 → re-exec stage 2 »**. Stage 1 détecte que
+  le script courant diffère du `bin/relay-update.sh` canonique, le copie sur lui-même, puis
+  `exec` stage 2 (garde `RELAY_SELFUPDATE_STAGE2`) qui rejoue la migration avec la logique à jour
+  — correct en **un seul run**. Idempotent (script déjà à jour → aucun saut, aucune boucle),
+  jamais déclenché depuis le canonique (`bin/`, on n'écrase pas la source) ni en `--check`.
+
 ## [1.5.0] — 2026-06-19
 
 ### Added
@@ -94,7 +110,8 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
   (compteurs) et `RELAY_RULE_POOL.md` (registre human-gated) reclassés TEMPLATE seed-once
   → un update n'écrase plus aucune donnée de projet.
 
-[Non publié]: https://github.com/GitAmboudilaye/relay/compare/v1.5.0...HEAD
+[Non publié]: https://github.com/GitAmboudilaye/relay/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/GitAmboudilaye/relay/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/GitAmboudilaye/relay/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/GitAmboudilaye/relay/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/GitAmboudilaye/relay/compare/v1.2.0...v1.3.0
