@@ -11,6 +11,29 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.11.0] — 2026-06-19
+
+### Added
+- **Security Pattern Memory** — rôle « Spécialiste cybersécurité », **Couche 4** (auto-feed de
+  `SECURITY_RULES.md`, `SEC-4`). `relay-check.sh` (§9c) détecte qu'une **correction de sécurité** a
+  atterri — un finding de `KNOWN_ISSUES.md` passe `✅ RÉSOLU` dans le diff stagé **et** ce diff porte un
+  marqueur `[security_surface]` (réutilise le vocabulaire d'instance → moteur vierge, comme §9b). Si la
+  section `Patterns appris` de `SECURITY_RULES.md` n'a **pas** reçu de puce dans le même commit → **un
+  avertissement signal-only** invitant à enregistrer le pattern appris, pour que la session suivante ne
+  réintroduise pas le bug corrigé (miroir du Regression Shield, transposé à la sécurité).
+- Le **déclencheur** est déterministe (grep) ; la **puce** reste **curatée par l'humain** — on n'auto-écrit
+  jamais de la sécurité (le LLM est la couche faible). Token-**neutre** (1 puce ciblée, soumise à la jauge
+  densité anti-inflation). **Aucune migration `relay-update`** : `relay-check.sh` se propage seul par la
+  boucle de copie, et `SECURITY_RULES.md` est déjà seedé (Couche 2, v1.10.0).
+- `RELAY_PROTOCOL.md §4b` — étendu : après un fix sécu, enregistrer un pattern appris (Couche 4).
+
+### Notes
+- **Lucidité** (inchangée) : gate commit/CI, **pas** un IDS/WAF runtime — ne remplace pas un pentest.
+  WARNING signal-only : la détection est heuristique (faux positifs assumés), elle guide sans bloquer.
+- **Rôle « Spécialiste cybersécurité » COMPLET** : Couche 1 (gate déterministe, `SEC-1`/`SEC-1b`, v1.8.x)
+  + Couche 3 (CI, `SEC-3`, v1.9.0) + Couche 2 (ancrage sélectif, `SEC-2`, v1.10.0) + Couche 4 (auto-feed,
+  `SEC-4`, v1.11.0).
+
 ## [1.10.0] — 2026-06-19
 
 ### Added

@@ -58,4 +58,7 @@ jobs:
           [ -f docs/rules/SECURITY_RULES.md ] || { echo "::error::docs/rules/SECURITY_RULES.md absent après relay-init (SEC-2)"; exit 1; }
           grep -qE '^\[security_surface\]' docs/.relay/rules.conf \
             || { echo "::error::section [security_surface] absente de rules.conf (SEC-2)"; exit 1; }
-          echo "✅ bootstrap + relay-check + workflow CI (SEC-3) + ancrage sécu sélectif (SEC-2) OK"
+          # SEC-4 : le moteur propagé porte le Security Pattern Memory (§9c, auto-feed SECURITY_RULES.md).
+          grep -q 'Security Pattern Memory' docs/scripts/relay-check.sh \
+            || { echo "::error::relay-check.sh propagé ne porte pas §9c Security Pattern Memory (SEC-4)"; exit 1; }
+          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) OK"
