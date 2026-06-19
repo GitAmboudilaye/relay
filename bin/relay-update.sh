@@ -298,6 +298,37 @@ DSCONF
   SEEDED_DS=1
 fi
 
+# ── 2d. Migration Security Shield (≥ v1.8.0) — gate déterministe sécu ────────────────
+# Depuis v1.8.0, le Security Shield (§9 du moteur) lit ses patterns dans rules.conf,
+# sections [security_forbidden] (ERREUR/bloque) et [security_warn] (WARNING). Idempotent
+# AU NIVEAU SECTION : on AJOUTE les sections si absentes (projet init avant v1.8.0 → ne
+# RIEN perdre = enrichir, pas recréer). Si déjà présentes → on n'y touche pas (instance).
+SEEDED_SEC=0
+if [ -f "$RULES_CONF" ] && ! grep -qE '^\[security_forbidden\]' "$RULES_CONF" 2>/dev/null; then
+  cat >> "$RULES_CONF" <<'SECCONF'
+
+# ── Security Shield (seedé par relay-update v1.8.0) ──────────────────────────
+# Patterns de sécurité dangereux dans le diff stagé (code ET config). Deux sections :
+#   [security_forbidden] = ERREUR (bloque le commit) ; [security_warn] = WARNING.
+# Format : <regex> | msg=<remédiation> | exclude=<regex contenu> | exclude-path=<fragment>
+# LUCIDITÉ : gate commit/CI, PAS un IDS/WAF runtime — ne remplace pas un pentest.
+[security_forbidden]
+-----BEGIN ([A-Z]+ )?PRIVATE KEY-----   | msg=clé privée en clair commitée — révoquer + déplacer vers un secret store
+AKIA[0-9A-Z]{16}                        | msg=clé d'accès AWS en clair — révoquer immédiatement + secret store
+# Per-stack (décommenter selon VOTRE stack) :
+# password\s*=\s*["'][^"'$]{6,}["']                      | msg=mot de passe codé en dur — var d'env/secret store | exclude=(getenv|process\.env|Environment\.|GetValue)
+# (SELECT|INSERT|UPDATE|DELETE)\b.*"\s*\+                 | msg=SQL concaténé (injection) — requête paramétrée
+# pickle\.loads                                          | msg=désérialisation pickle non sûre (RCE)
+# dangerouslySetInnerHTML                                | msg=injection HTML (XSS) — assainir l'entrée
+
+[security_warn]
+\b(MD5|md5|Md5|SHA1|sha1|Sha1)\b                         | msg=hash faible — SHA-256+/bcrypt/argon2 pour un secret | exclude=(checksum|etag|cache.?key|content.?hash)
+(api[_-]?key|secret|token|passwd)\s*[:=]\s*["'][^"']{8,}["']   | msg=secret potentiel en clair — variable d'env ? | exclude=(getenv|process\.env|Environment\.|example|placeholder|xxxx|changeme|your[_-])
+[?&](id|user_?id|account_?id)=                           | msg=identifiant en query string — vérifier l'autorisation (risque IDOR)
+SECCONF
+  SEEDED_SEC=1
+fi
+
 # ── 3. Mettre à jour docs/.relay-version (conserve PROJECT/CANONICAL_URL d'instance) ─
 {
   echo "$NEW_VERSION"
@@ -323,6 +354,10 @@ fi
 if [ "$SEEDED_DS" -eq 1 ]; then
   echo "[RELAY-UPDATE] 🌱 Migration v1.4.0 : sections [design_warn_*] ajoutées à $RULES_CONF (Design System Shield préservé à l'identique)"
   echo "[RELAY-UPDATE]    (relisez/adaptez à votre design system, ou supprimez ces sections si non pertinent)."
+fi
+if [ "$SEEDED_SEC" -eq 1 ]; then
+  echo "[RELAY-UPDATE] 🌱 Migration v1.8.0 : sections [security_*] ajoutées à $RULES_CONF (Security Shield activé — patterns universels)"
+  echo "[RELAY-UPDATE]    (relisez/adaptez à votre stack ; décommentez les patterns per-stack pertinents). Gate commit/CI, pas un pentest."
 fi
 echo "[RELAY-UPDATE] ℹ️  Aucun autre fichier d'instance touché (NEXT_SESSION.md, docs/context/*, KNOWN_ISSUES.md…)."
 echo "[RELAY-UPDATE] ════════════════════════════════════════"
