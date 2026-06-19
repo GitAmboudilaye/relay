@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# relay-check.sh v3.6 — Validation structure + contenu + commits + clôture NEXT_SESSION.md
+# relay-check.sh v3.7 — Validation structure + contenu + commits + clôture NEXT_SESSION.md
+# + Security Shield (piloté par rules.conf, sections [security_forbidden] BLOQUANT / [security_warn] — v1.8.0)
 # + Porte de reçu (v1.2.0) : `[verified-run:<hash>]` exige un reçu relay-run.sh existant (sinon ERREUR)
 # + Skew check (signal-only) : alerte si moteur d'instance < canonique localisable
 # + Design System Shield (piloté par rules.conf, sections [design_warn_*] — v1.4.0)
@@ -639,6 +640,104 @@ if [ -n "$DART_STAGED" ] || [ -n "$CSS_STAGED" ]; then
 
   if [ "$DS_SECTIONS_ACTIVE" -gt 0 ] && [ "$DS_WARNINGS" -eq 0 ]; then
     $SCORE_ONLY || echo "[RELAY] ✅ Design System Shield : aucune violation détectée"
+  fi
+fi
+
+# ── 9. Security Shield — piloté par docs/.relay/rules.conf (v1.8.0) ───────────
+# Patterns de sécurité dangereux dans le diff stagé (code ET config). Deux sections :
+#   [security_forbidden] = ERREUR (bloque) ; [security_warn] = WARNING (ne bloque pas).
+# Format ligne : <regex ERE> | msg=<remédiation> | exclude=<regex contenu> | exclude-path=<fragment>
+# Zéro donnée projet dans le moteur : le mécanisme est ici, les patterns vivent dans rules.conf.
+# LUCIDITÉ : gate commit/CI, PAS un IDS/WAF runtime — ne remplace pas un pentest.
+
+# Parse une section sécu → SEC_PAT/SEC_MSG/SEC_EXCL/SEC_EXCLPATH (miroir parse_design_section + exclude contenu).
+parse_security_section() {
+  local section="$1" line in_section=0 pat rest token
+  SEC_PAT=(); SEC_MSG=(); SEC_EXCL=(); SEC_EXCLPATH=()
+  [ -f "$RULES_CONF" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line#"${line%%[![:space:]]*}"}"                   # ltrim
+    [ -z "$line" ] && continue
+    case "$line" in \#*) continue ;; esac                     # commentaire
+    if [[ "$line" =~ ^\[[a-z_]+\]$ ]]; then                   # en-tête de section
+      [ "$line" = "[$section]" ] && in_section=1 || in_section=0
+      continue
+    fi
+    [ "$in_section" = "1" ] || continue
+    pat="${line%%' | '*}"                                     # regex = avant le 1er « | »
+    local msg="" excl="" exclpath=""
+    if [[ "$line" == *' | '* ]]; then
+      rest="${line#*' | '}"
+      while [ -n "$rest" ]; do                                # champs key=value séparés par « | »
+        if [[ "$rest" == *' | '* ]]; then
+          token="${rest%%' | '*}"; rest="${rest#*' | '}"
+        else
+          token="$rest"; rest=""
+        fi
+        case "$token" in
+          msg=*)          msg="${token#msg=}" ;;
+          exclude=*)      excl="${token#exclude=}" ;;
+          exclude-path=*) exclpath="${token#exclude-path=}" ;;
+        esac
+      done
+    fi
+    pat="${pat%"${pat##*[![:space:]]}"}"                      # rtrim regex
+    [ -z "$pat" ] && continue
+    SEC_PAT+=("$pat"); SEC_MSG+=("$msg"); SEC_EXCL+=("$excl"); SEC_EXCLPATH+=("$exclpath")
+  done < "$RULES_CONF"
+}
+
+# Scanne les fichiers stagés contre une section sécu. $1=stagés $2=section $3=severity(error|warn).
+scan_security_section() {
+  local staged="$1" section="$2" severity="$3"
+  local f pattern msg excl exclpath i added matches
+  [ -z "$staged" ] && return 0
+  parse_security_section "$section"
+  if [ "${#SEC_PAT[@]}" -eq 0 ]; then
+    $SCORE_ONLY || echo "[RELAY] ⚠️  Security Shield [$section] inactif : section absente/vide dans $RULES_CONF"
+    WARNINGS=$((WARNINGS + 1))
+    return 0
+  fi
+  SEC_SECTIONS_ACTIVE=$((SEC_SECTIONS_ACTIVE + 1))
+  for i in "${!SEC_PAT[@]}"; do
+    pattern="${SEC_PAT[$i]}"; msg="${SEC_MSG[$i]}"; excl="${SEC_EXCL[$i]}"; exclpath="${SEC_EXCLPATH[$i]}"
+    while IFS= read -r f; do
+      [ ! -f "$f" ] && continue
+      [ -n "$exclpath" ] && [[ "$f" == *"$exclpath"* ]] && continue   # exclusion de chemin (instance)
+      # -e "$pattern" : un pattern peut commencer par « - » (ex. clé privée -----BEGIN…) → sinon grep le lit comme options
+      added=$(git diff --cached -- "$f" 2>/dev/null | grep "^+" | grep -vE "^\+\+\+" | grep -E -e "$pattern" 2>/dev/null || true)
+      if [ -n "$excl" ] && [ -n "$added" ]; then                      # exclusion de contenu (faux positif légitime)
+        added=$(echo "$added" | grep -vE -e "$excl" 2>/dev/null || true)
+      fi
+      matches=$(echo "$added" | grep -cE -e "$pattern" 2>/dev/null || true)
+      [ -z "$added" ] && matches=0
+      if [ "$matches" -gt 0 ]; then
+        if [ "$severity" = "error" ]; then
+          $SCORE_ONLY || echo "[RELAY] ❌ Security Shield : \`$pattern\` dans $f — ${msg:-pattern de sécurité interdit} (+$matches lignes)"
+          ERRORS=$((ERRORS + 1)); SEC_ERRORS=$((SEC_ERRORS + 1))
+        else
+          $SCORE_ONLY || echo "[RELAY] ⚠️  Security Shield : \`$pattern\` dans $f — ${msg:-vérifier (sécurité)} (+$matches lignes)"
+          WARNINGS=$((WARNINGS + 1)); SEC_WARNINGS=$((SEC_WARNINGS + 1))
+        fi
+      fi
+    done <<< "$staged"
+  done
+}
+
+# Code ET config (un secret vit souvent en config). rules.conf est EXCLU (il contient des patterns par nature).
+SEC_STAGED=$(git diff --cached --name-only 2>/dev/null | grep -E '\.(cs|dart|py|ts|tsx|js|jsx|go|rs|java|kt|rb|php|json|ya?ml|env|xml|properties|toml|ini|config|sh)$' | grep -vE 'docs/\.relay/rules\.conf' || true)
+
+SEC_ERRORS=0
+SEC_WARNINGS=0
+SEC_SECTIONS_ACTIVE=0
+
+if [ -n "$SEC_STAGED" ]; then
+  $SCORE_ONLY || echo ""
+  $SCORE_ONLY || echo "── Security Shield ──"
+  scan_security_section "$SEC_STAGED" "security_forbidden" "error"
+  scan_security_section "$SEC_STAGED" "security_warn"      "warn"
+  if [ "$SEC_SECTIONS_ACTIVE" -gt 0 ] && [ "$SEC_ERRORS" -eq 0 ] && [ "$SEC_WARNINGS" -eq 0 ]; then
+    $SCORE_ONLY || echo "[RELAY] ✅ Security Shield : aucun pattern de sécurité détecté"
   fi
 fi
 
