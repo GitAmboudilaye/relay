@@ -11,6 +11,27 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.8.0] — 2026-06-19
+
+### Added
+- **Security Shield** (`relay-check.sh` §9, piloté par `rules.conf`) — rôle « Spécialiste cybersécurité »,
+  Couche 1 (gate déterministe). Scanne le diff stagé (code **et** config) contre deux sections d'instance :
+  `[security_forbidden]` (sévérité **ERREUR** → bloque le commit) et `[security_warn]` (WARNING). Format
+  `<regex> | msg=<remédiation> | exclude=<regex contenu> | exclude-path=<fragment>`. **0 token LLM** : pur
+  `grep` déterministe — fait le travail que le LLM ferait en lisant (token-négatif, `VISION.md §4`).
+- `templates/docs/.relay/rules.conf` — sections `[security_forbidden]`/`[security_warn]` seedées :
+  **patterns universels actifs** (clé privée en clair, clé AWS `AKIA…`, hash faible MD5/SHA1, secret en clair,
+  identifiant en query string = risque IDOR) + **exemples per-stack commentés** (.NET/Python/Go/Node/React).
+  Le moteur ne fournit que le **mécanisme** ; les patterns vivent dans l'instance (« moteur = 0 donnée projet »).
+- `docs/SECURITY-ROLE-PLAN.md` — cadrage des 4 couches du rôle (gate déterministe · ancrage sélectif · CI
+  outillée · `SECURITY_RULES.md` auto-alimenté) + test tokens par couche + séquencement + découpage `TASK[SEC-*]`.
+
+### Notes
+- **Lucidité** : gate commit/CI, **pas** un IDS/WAF runtime — ne remplace pas un pentest.
+- Section sécu absente/vide → Shield inactif **annoncé** (jamais muet), miroir des Regression/Design Shields.
+- Reste à faire (suite du fil) : `SEC-1b` (seeding des sections sécu dans les `rules.conf` existants via
+  `relay-update`), `SEC-3` (CI gitleaks/semgrep), `SEC-2`/`SEC-4` (ancrage sélectif + auto-feed).
+
 ## [1.7.0] — 2026-06-19
 
 ### Added
