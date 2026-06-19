@@ -129,6 +129,37 @@ RULESCONF
   SEEDED_RULES=1
 fi
 
+# ── 2c. Migration Design System (≥ v1.4.0) — externalisation des règles DS ───────────
+# Depuis v1.4.0, le Design System Shield (§8 du moteur) ne contient PLUS de patterns/
+# messages/chemins codés en dur : ils vivent dans rules.conf, sections [design_warn_*].
+# Idempotent AU NIVEAU SECTION : on AJOUTE les sections DS si elles sont absentes, même
+# si rules.conf existe déjà (cas d'un projet migré en v1.3.0 → ne RIEN perdre = on doit
+# l'enrichir, pas le recréer). Si déjà présentes → on n'y touche pas (données d'instance).
+SEEDED_DS=0
+if [ -f "$RULES_CONF" ] && ! grep -qE '^\[design_warn_flutter\]' "$RULES_CONF" 2>/dev/null; then
+  cat >> "$RULES_CONF" <<'DSCONF'
+
+# ── Design System Shield (seedé par relay-update v1.4.0) ─────────────────────
+# Anciens patterns/messages/exclusions auparavant codés en dur dans le moteur (§8).
+# Format : <regex> | msg=<texte de remédiation> | exclude-path=<fragment-de-chemin>
+# Sévérité = WARNING (ne bloque pas le commit). Section absente → shield DS inactif.
+# → Adaptez à VOTRE design system (ou supprimez la section si non pertinent).
+[design_warn_flutter]
+Colors\.green\b   | msg=utiliser AppColors.* à la place | exclude-path=core/theme/
+Colors\.blue\b    | msg=utiliser AppColors.* à la place | exclude-path=core/theme/
+Colors\.red\b     | msg=utiliser AppColors.* à la place | exclude-path=core/theme/
+Colors\.grey\b    | msg=utiliser AppColors.* à la place | exclude-path=core/theme/
+Colors\.orange\b  | msg=utiliser AppColors.* à la place | exclude-path=core/theme/
+Colors\.purple\b  | msg=utiliser AppColors.* à la place | exclude-path=core/theme/
+Colors\.yellow\b  | msg=utiliser AppColors.* à la place | exclude-path=core/theme/
+Colors\.black\b   | msg=utiliser AppColors.* à la place | exclude-path=core/theme/
+
+[design_warn_css]
+(color|background|border)[^:]*:[^;]*#[0-9a-fA-F]{3,6}   | msg=couleur hex hardcodée — utiliser var(--ac-*) | exclude-path=design-system
+DSCONF
+  SEEDED_DS=1
+fi
+
 # ── 3. Mettre à jour docs/.relay-version (conserve PROJECT/CANONICAL_URL d'instance) ─
 {
   echo "$NEW_VERSION"
@@ -150,6 +181,10 @@ fi
 if [ "$SEEDED_RULES" -eq 1 ]; then
   echo "[RELAY-UPDATE] 🌱 Migration v1.3.0 : $RULES_CONF seedé avec les anciens patterns codés en dur"
   echo "[RELAY-UPDATE]    (Regression Shield préservé à l'identique — relisez/adaptez cette liste à votre stack)."
+fi
+if [ "$SEEDED_DS" -eq 1 ]; then
+  echo "[RELAY-UPDATE] 🌱 Migration v1.4.0 : sections [design_warn_*] ajoutées à $RULES_CONF (Design System Shield préservé à l'identique)"
+  echo "[RELAY-UPDATE]    (relisez/adaptez à votre design system, ou supprimez ces sections si non pertinent)."
 fi
 echo "[RELAY-UPDATE] ℹ️  Aucun autre fichier d'instance touché (NEXT_SESSION.md, docs/context/*, KNOWN_ISSUES.md…)."
 echo "[RELAY-UPDATE] ════════════════════════════════════════"

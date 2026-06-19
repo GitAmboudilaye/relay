@@ -2,7 +2,7 @@
 # relay-check.sh v3.6 — Validation structure + contenu + commits + clôture NEXT_SESSION.md
 # + Porte de reçu (v1.2.0) : `[verified-run:<hash>]` exige un reçu relay-run.sh existant (sinon ERREUR)
 # + Skew check (signal-only) : alerte si moteur d'instance < canonique localisable
-# + Design System Shield (Flutter AppColors/AppRadius/AppSpacing + CSS var(--ac-*))
+# + Design System Shield (piloté par rules.conf, sections [design_warn_*] — v1.4.0)
 # + Branch Guard (avertissement si commit direct sur main/develop avec .cs/.dart)
 # + Jauge de densité anti-inflation (Pilier 11 — signal-only, ne modifie pas le Health Score)
 # Usage: ./docs/scripts/relay-check.sh [--strict] [--score-only] [--density] [--companion-repo=<path>]
@@ -550,49 +550,94 @@ if [ -n "$STAGED_FILES" ]; then
   fi
 fi
 
-# ── 8. Design System Shield — Flutter + CSS ──────────────────────────────────
-# Vérifie que les nouveaux fichiers .dart et .css/.cshtml utilisent les design systems
-DART_STAGED=$(git diff --cached --name-only 2>/dev/null | grep -E '\.dart$' | grep -v 'core/theme/' || true)
-CSS_STAGED=$(git diff --cached --name-only 2>/dev/null | grep -E '\.(css|cshtml)$' | grep -v 'design-system' || true)
+# ── 8. Design System Shield — piloté par docs/.relay/rules.conf (v1.4.0) ──────
+# Les patterns/messages/exclusions du Design System vivent dans rules.conf (instance),
+# sections [design_warn_flutter] (fichiers .dart) et [design_warn_css] (.css/.cshtml).
+# Sévérité = WARNING (ne bloque JAMAIS le commit). Section absente/vide → shield DS
+# inactif pour ce type de fichier, ANNONCÉ (jamais muet). Zéro donnée projet dans le moteur.
 
-DS_ERRORS=0
+# Parse une section DS de rules.conf → remplit les tableaux globaux DS_PAT/DS_MSG/DS_EXCL.
+# Format de ligne : <regex> | msg=<texte> | exclude-path=<fragment-de-chemin>
+# (msg et exclude-path optionnels ; champs séparés par « | », ordre libre).
+parse_design_section() {
+  local section="$1" line in_section=0 pat rest token
+  DS_PAT=(); DS_MSG=(); DS_EXCL=()
+  [ -f "$RULES_CONF" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line#"${line%%[![:space:]]*}"}"                   # ltrim
+    [ -z "$line" ] && continue
+    case "$line" in \#*) continue ;; esac                     # commentaire
+    if [[ "$line" =~ ^\[[a-z_]+\]$ ]]; then                   # en-tête de section
+      [ "$line" = "[$section]" ] && in_section=1 || in_section=0
+      continue
+    fi
+    [ "$in_section" = "1" ] || continue
+    pat="${line%%' | '*}"                                     # regex = avant le 1er « | »
+    local msg="" excl=""
+    if [[ "$line" == *' | '* ]]; then
+      rest="${line#*' | '}"
+      while [ -n "$rest" ]; do                                # champs key=value
+        if [[ "$rest" == *' | '* ]]; then
+          token="${rest%%' | '*}"; rest="${rest#*' | '}"
+        else
+          token="$rest"; rest=""
+        fi
+        case "$token" in
+          msg=*)          msg="${token#msg=}" ;;
+          exclude-path=*) excl="${token#exclude-path=}" ;;
+        esac
+      done
+    fi
+    pat="${pat%"${pat##*[![:space:]]}"}"                      # rtrim regex
+    [ -z "$pat" ] && continue
+    DS_PAT+=("$pat"); DS_MSG+=("$msg"); DS_EXCL+=("$excl")
+  done < "$RULES_CONF"
+}
+
+# Scanne les fichiers stagés d'un type contre une section DS. Sévérité WARNING.
+# $1=fichiers stagés  $2=section  $3=label  $4=regex de strip-commentaire (langage)
+scan_design_section() {
+  local staged="$1" section="$2" label="$3" comment_strip="$4"
+  local f pattern msg excl i matches
+  [ -z "$staged" ] && return 0
+  parse_design_section "$section"
+  if [ "${#DS_PAT[@]}" -eq 0 ]; then
+    $SCORE_ONLY || echo "[RELAY] ⚠️  Design System Shield ($label) inactif : section [$section] absente/vide dans $RULES_CONF"
+    WARNINGS=$((WARNINGS + 1))
+    return 0
+  fi
+  DS_SECTIONS_ACTIVE=$((DS_SECTIONS_ACTIVE + 1))
+  for i in "${!DS_PAT[@]}"; do
+    pattern="${DS_PAT[$i]}"; msg="${DS_MSG[$i]}"; excl="${DS_EXCL[$i]}"
+    while IFS= read -r f; do
+      [ ! -f "$f" ] && continue
+      [ -n "$excl" ] && [[ "$f" == *"$excl"* ]] && continue   # exclusion de chemin (déclarée par l'instance)
+      matches=$(git diff --cached -- "$f" 2>/dev/null | grep "^+" | grep -vE "^\+\+\+|$comment_strip" | grep -cE "$pattern" 2>/dev/null || true)
+      if [ "$matches" -gt 0 ]; then
+        $SCORE_ONLY || echo "[RELAY] ⚠️  Design System $label : \`$pattern\` dans $f — ${msg:-violation Design System} (+$matches lignes)"
+        WARNINGS=$((WARNINGS + 1))
+        DS_WARNINGS=$((DS_WARNINGS + 1))
+      fi
+    done <<< "$staged"
+  done
+}
+
+# Sélection des fichiers par type (extension = niveau langage, pas donnée projet) ;
+# l'exclusion de chemin projet (emplacement où le design system est défini) est dans rules.conf.
+DART_STAGED=$(git diff --cached --name-only 2>/dev/null | grep -E '\.dart$' || true)
+CSS_STAGED=$(git diff --cached --name-only 2>/dev/null | grep -E '\.(css|cshtml)$' || true)
+
 DS_WARNINGS=0
+DS_SECTIONS_ACTIVE=0
 
 if [ -n "$DART_STAGED" ] || [ -n "$CSS_STAGED" ]; then
   $SCORE_ONLY || echo ""
   $SCORE_ONLY || echo "── Design System Shield ──"
 
-  # Flutter : couleurs directes Flutter au lieu de AppColors
-  FLUTTER_COLOR_PATTERNS=("Colors\.green\b" "Colors\.blue\b" "Colors\.red\b" "Colors\.grey\b" "Colors\.orange\b" "Colors\.purple\b" "Colors\.yellow\b" "Colors\.black\b")
-  if [ -n "$DART_STAGED" ]; then
-    for pattern in "${FLUTTER_COLOR_PATTERNS[@]}"; do
-      while IFS= read -r f; do
-        [ ! -f "$f" ] && continue
-        MATCHES=$(git diff --cached -- "$f" 2>/dev/null | grep "^+" | grep -vE "^\+\+\+|//.*$" | grep -cE "$pattern" 2>/dev/null || true)
-        if [ "$MATCHES" -gt 0 ]; then
-          $SCORE_ONLY || echo "[RELAY] ⚠️  Design System Flutter : \`$pattern\` dans $f — utiliser AppColors.* à la place (+$MATCHES lignes)"
-          WARNINGS=$((WARNINGS + 1))
-          DS_WARNINGS=$((DS_WARNINGS + 1))
-        fi
-      done <<< "$DART_STAGED"
-    done
-  fi
+  scan_design_section "$DART_STAGED" "design_warn_flutter" "Flutter" '//.*$'
+  scan_design_section "$CSS_STAGED"  "design_warn_css"     "CSS"     '/\*'
 
-  # CSS/Razor : couleurs hexadécimales hardcodées au lieu de var(--ac-*)
-  CSS_HEX_PATTERN='(color|background|border)[^:]*:[^;]*#[0-9a-fA-F]{3,6}'
-  if [ -n "$CSS_STAGED" ]; then
-    while IFS= read -r f; do
-      [ ! -f "$f" ] && continue
-      MATCHES=$(git diff --cached -- "$f" 2>/dev/null | grep "^+" | grep -vE "^\+\+\+|/\*" | grep -cE "$CSS_HEX_PATTERN" 2>/dev/null || true)
-      if [ "$MATCHES" -gt 0 ]; then
-        $SCORE_ONLY || echo "[RELAY] ⚠️  Design System CSS : couleur hex hardcodée dans $f — utiliser var(--ac-*) (+$MATCHES lignes)"
-        WARNINGS=$((WARNINGS + 1))
-        DS_WARNINGS=$((DS_WARNINGS + 1))
-      fi
-    done <<< "$CSS_STAGED"
-  fi
-
-  if [ "$DS_ERRORS" -eq 0 ] && [ "$DS_WARNINGS" -eq 0 ]; then
+  if [ "$DS_SECTIONS_ACTIVE" -gt 0 ] && [ "$DS_WARNINGS" -eq 0 ]; then
     $SCORE_ONLY || echo "[RELAY] ✅ Design System Shield : aucune violation détectée"
   fi
 fi
