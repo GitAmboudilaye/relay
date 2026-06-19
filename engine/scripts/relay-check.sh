@@ -471,61 +471,82 @@ else
   WARNINGS=$((WARNINGS + 1))
 fi
 
-# ── 7. Regression Shield — patterns interdits dans git diff --cached ─────────
-# Vérifie KNOWN_ISSUES.md §Patterns à ne jamais réintroduire contre les fichiers stagés
-STAGED_FILES=$(git diff --cached --name-only 2>/dev/null | grep -E '\.(cs|dart)$' || true)
-KNOWN_ISSUES="docs/rules/KNOWN_ISSUES.md"
+# ── 7. Regression Shield — patterns interdits déclarés par le PROJET ─────────
+# Source de vérité = docs/.relay/rules.conf (fichier d'INSTANCE, committé, jamais écrasé
+# par relay-update). AUCUN pattern projet n'est codé en dur dans le moteur : chaque projet
+# déclare SES règles d'archi/sécurité ; un projet sans config voit le Shield INACTIF avec un
+# avertissement explicite — jamais un assouplissement muet. Les anciens patterns codés en dur
+# sont seedés dans rules.conf par relay-update.sh au 1ᵉʳ update (zéro perte de garde).
+STAGED_FILES=$(git diff --cached --name-only 2>/dev/null | grep -E '\.(cs|dart|py|ts|tsx|js|jsx|go|rs|java|kt|rb|php)$' || true)
+RULES_CONF="docs/.relay/rules.conf"
 
-if [ -n "$STAGED_FILES" ] && [ -f "$KNOWN_ISSUES" ]; then
+if [ -n "$STAGED_FILES" ]; then
+  # Parse rules.conf → FORBIDDEN_PATTERNS (+ PATTERN_EXCLUDE optionnel). Format plat :
+  # une regex (ERE, grep -E) par ligne sous [forbidden_patterns] ; exclusion inline
+  # optionnelle « <regex> | exclude=<regex> » ; lignes vides et « # » = ignorées.
+  FORBIDDEN_PATTERNS=()
+  declare -A PATTERN_EXCLUDE=()
+  RS_IN=0
+  if [ -f "$RULES_CONF" ]; then
+    while IFS= read -r rs_line || [ -n "$rs_line" ]; do
+      rs_line="${rs_line#"${rs_line%%[![:space:]]*}"}"          # ltrim
+      [ -z "$rs_line" ] && continue
+      case "$rs_line" in \#*) continue ;; esac                  # commentaire
+      if [[ "$rs_line" =~ ^\[[a-z_]+\]$ ]]; then                # en-tête de section
+        [ "$rs_line" = "[forbidden_patterns]" ] && RS_IN=1 || RS_IN=0
+        continue
+      fi
+      [ "$RS_IN" = "1" ] || continue
+      if [[ "$rs_line" == *" | exclude="* ]]; then
+        rs_pat="${rs_line%% | exclude=*}"
+        rs_exc="${rs_line##* | exclude=}"
+      else
+        rs_pat="$rs_line"; rs_exc=""
+      fi
+      rs_pat="${rs_pat%"${rs_pat##*[![:space:]]}"}"             # rtrim pattern
+      rs_exc="${rs_exc#"${rs_exc%%[![:space:]]*}"}"; rs_exc="${rs_exc%"${rs_exc##*[![:space:]]}"}"
+      [ -z "$rs_pat" ] && continue
+      FORBIDDEN_PATTERNS+=("$rs_pat")
+      [ -n "$rs_exc" ] && PATTERN_EXCLUDE["$rs_pat"]="$rs_exc"
+    done < "$RULES_CONF"
+  fi
+
   $SCORE_ONLY || echo ""
   $SCORE_ONLY || echo "── Regression Shield ──"
 
-  # Patterns critiques à ne jamais réintroduire (extraits de KNOWN_ISSUES §Patterns)
-  FORBIDDEN_PATTERNS=(
-    "\.Result\b"              # .Result bloquant dans controller async (deadlock)
-    "\.Wait()"                # .Wait() bloquant
-    "\.Include\(.*\)\.Select" # Include après Select (EF Core ignore)
-    "\.Select.*\.Include"     # Include après Select inversé
-    "localhost:7285"          # URL hardcodée
-    "localhost:5000"          # URL hardcodée
-    "isValidé"                # accent dans identifiant Dart
-    "isApprouvé"              # accent dans identifiant Dart
-    "logout.*GET"             # logout via GET (CSRF)
-  )
+  if [ "${#FORBIDDEN_PATTERNS[@]}" -eq 0 ]; then
+    # Fallback EXPLICITE (jamais muet) : aucune règle déclarée → Shield inactif + warning.
+    if [ -f "$RULES_CONF" ]; then
+      $SCORE_ONLY || echo "[RELAY] ⚠️  Regression Shield inactif : 0 pattern déclaré dans $RULES_CONF (section [forbidden_patterns] vide)."
+    else
+      $SCORE_ONLY || echo "[RELAY] ⚠️  Regression Shield inactif : $RULES_CONF absent — ce projet n'a déclaré aucune règle (relay-init dépose un modèle ; relay-update seede les anciens patterns)."
+    fi
+    WARNINGS=$((WARNINGS + 1))
+  else
+    SHIELD_ERRORS=0
+    for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
+      EXCLUDE="${PATTERN_EXCLUDE[$pattern]:-}"
+      while IFS= read -r staged_file; do
+        [ ! -f "$staged_file" ] && continue
+        ADDED=$(git diff --cached -- "$staged_file" 2>/dev/null | grep "^+" | grep -vE "^\+\+\+" | grep -E "$pattern" 2>/dev/null || true)
+        # Retirer les lignes correspondant à l'exclusion (affectation légitime) avant de compter
+        if [ -n "$EXCLUDE" ] && [ -n "$ADDED" ]; then
+          ADDED=$(echo "$ADDED" | grep -vE "$EXCLUDE" 2>/dev/null || true)
+        fi
+        MATCHES=$(echo "$ADDED" | grep -cE "$pattern" 2>/dev/null || true)
+        [ -z "$ADDED" ] && MATCHES=0
+        if [ "$MATCHES" -gt 0 ]; then
+          $SCORE_ONLY || echo "[RELAY] ❌ Regression Shield : pattern interdit \`$pattern\` détecté dans $staged_file (+$MATCHES lignes)"
+          ERRORS=$((ERRORS + 1))
+          SHIELD_ERRORS=$((SHIELD_ERRORS + 1))
+        fi
+      done <<< "$STAGED_FILES"
+    done
 
-  # Exclusions par pattern (TASK[RELAY-REGSHIELD-FALSEPOS]) : l'antipattern visé est
-  # `.Result` en ACCESSEUR bloquant (`.Result;`, `.Result.`, `.Result)`). L'AFFECTATION
-  # `.Result = <IActionResult>` est l'idiome MVC `IActionFilter` (context.Result = ...) →
-  # bénin, à NE PAS bloquer (faux positif déjà documenté KNOWN_ISSUES l.94, a forcé un
-  # --no-verify Session 6). On garde grep -E (portable, pas de lookahead -P) en post-filtrant
-  # la ligne avec `grep -v` sur l'exclusion. Clé = pattern ; valeur = regex d'affectation à exclure.
-  declare -A PATTERN_EXCLUDE=(
-    ["\.Result\b"]="\.Result[[:space:]]*="   # exclut l'affectation context.Result = / Result =
-  )
-
-  SHIELD_ERRORS=0
-  for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
-    EXCLUDE="${PATTERN_EXCLUDE[$pattern]:-}"
-    while IFS= read -r staged_file; do
-      [ ! -f "$staged_file" ] && continue
-      ADDED=$(git diff --cached -- "$staged_file" 2>/dev/null | grep "^+" | grep -vE "^\+\+\+" | grep -E "$pattern" 2>/dev/null || true)
-      # Retirer les lignes correspondant à l'exclusion (affectation légitime) avant de compter
-      if [ -n "$EXCLUDE" ] && [ -n "$ADDED" ]; then
-        ADDED=$(echo "$ADDED" | grep -vE "$EXCLUDE" 2>/dev/null || true)
-      fi
-      MATCHES=$(echo "$ADDED" | grep -cE "$pattern" 2>/dev/null || true)
-      [ -z "$ADDED" ] && MATCHES=0
-      if [ "$MATCHES" -gt 0 ]; then
-        $SCORE_ONLY || echo "[RELAY] ❌ Regression Shield : pattern interdit \`$pattern\` détecté dans $staged_file (+$MATCHES lignes)"
-        ERRORS=$((ERRORS + 1))
-        SHIELD_ERRORS=$((SHIELD_ERRORS + 1))
-      fi
-    done <<< "$STAGED_FILES"
-  done
-
-  if [ "$SHIELD_ERRORS" -eq 0 ]; then
-    FILE_COUNT=$(echo "$STAGED_FILES" | grep -c "." 2>/dev/null || true)
-    $SCORE_ONLY || echo "[RELAY] ✅ Regression Shield : $FILE_COUNT fichier(s) vérifié(s) — 0 pattern interdit"
+    if [ "$SHIELD_ERRORS" -eq 0 ]; then
+      FILE_COUNT=$(echo "$STAGED_FILES" | grep -c "." 2>/dev/null || true)
+      $SCORE_ONLY || echo "[RELAY] ✅ Regression Shield : $FILE_COUNT fichier(s) vérifié(s) — 0 pattern interdit (${#FORBIDDEN_PATTERNS[@]} règle(s) active(s))"
+    fi
   fi
 fi
 

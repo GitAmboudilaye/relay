@@ -123,6 +123,9 @@ render "$TEMPLATES/docs/rules/KNOWN_ISSUES.md"        "docs/rules/KNOWN_ISSUES.m
 # seedées ici UNE fois, puis propriété du projet — relay-update.sh ne les réécrit JAMAIS.
 render "$TEMPLATES/docs/rules/RELAY_METRICS.md"       "docs/rules/RELAY_METRICS.md"
 render "$TEMPLATES/docs/rules/RELAY_RULE_POOL.md"     "docs/rules/RELAY_RULE_POOL.md"
+# rules.conf = règles d'instance du Regression Shield. Déposé commenté → Shield inactif
+# tant que le projet n'a pas déclaré ses patterns. Donnée d'instance, jamais propagée.
+render "$TEMPLATES/docs/.relay/rules.conf"            "docs/.relay/rules.conf"
 
 # ── 3. Manifeste docs/.relay-version ─────────────────────────────────────────
 {

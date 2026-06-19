@@ -98,6 +98,37 @@ for r in RELAY_PROTOCOL.md; do
   [ -f "$ENGINE_RULES/$r" ] && copy_engine_file "$ENGINE_RULES/$r" "docs/rules/$r"
 done
 
+# ── 2b. Migration rules.conf (≥ v1.3.0) — externalisation des patterns interdits ─────
+# Depuis v1.3.0, le moteur ne contient PLUS de patterns interdits codés en dur : ils
+# vivent dans docs/.relay/rules.conf (instance). Pour ne RIEN perdre, si le projet n'a
+# pas encore de rules.conf, on le seede avec l'ancienne liste codée en dur → le
+# Regression Shield conserve EXACTEMENT ses patterns (zéro assouplissement silencieux).
+# Idempotent : ne touche jamais un rules.conf déjà présent (fichier d'instance).
+RULES_CONF="docs/.relay/rules.conf"
+SEEDED_RULES=0
+if [ ! -f "$RULES_CONF" ]; then
+  mkdir -p "$(dirname "$RULES_CONF")"
+  cat > "$RULES_CONF" <<'RULESCONF'
+# RELAY — règles d'instance du Regression Shield
+# Seedé par relay-update (migration v1.3.0) à partir des patterns auparavant codés en dur
+# dans le moteur. Fichier d'INSTANCE : committé, jamais écrasé par un futur relay-update.
+# Format : une regex (ERE, grep -E) par ligne sous [forbidden_patterns] ; exclusion inline
+# optionnelle « <regex> | exclude=<regex> » ; « # » et lignes vides ignorées.
+# → Élaguez/adaptez cette liste à VOTRE stack ; ajoutez vos propres anti-patterns.
+[forbidden_patterns]
+\.Result\b              | exclude=\.Result[[:space:]]*=
+\.Wait()
+\.Include\(.*\)\.Select
+\.Select.*\.Include
+localhost:7285
+localhost:5000
+isValidé
+isApprouvé
+logout.*GET
+RULESCONF
+  SEEDED_RULES=1
+fi
+
 # ── 3. Mettre à jour docs/.relay-version (conserve PROJECT/CANONICAL_URL d'instance) ─
 {
   echo "$NEW_VERSION"
@@ -116,5 +147,9 @@ else
   echo "[RELAY-UPDATE] ✅ ${#CHANGED[@]} fichier(s) moteur mis à jour :"
   for c in "${CHANGED[@]}"; do echo "[RELAY-UPDATE]    • $c"; done
 fi
-echo "[RELAY-UPDATE] ℹ️  Aucun fichier d'instance touché (NEXT_SESSION.md, docs/context/*, KNOWN_ISSUES.md…)."
+if [ "$SEEDED_RULES" -eq 1 ]; then
+  echo "[RELAY-UPDATE] 🌱 Migration v1.3.0 : $RULES_CONF seedé avec les anciens patterns codés en dur"
+  echo "[RELAY-UPDATE]    (Regression Shield préservé à l'identique — relisez/adaptez cette liste à votre stack)."
+fi
+echo "[RELAY-UPDATE] ℹ️  Aucun autre fichier d'instance touché (NEXT_SESSION.md, docs/context/*, KNOWN_ISSUES.md…)."
 echo "[RELAY-UPDATE] ════════════════════════════════════════"
