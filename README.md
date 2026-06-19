@@ -4,8 +4,9 @@
 > **sans mémoire partagée** — de travailler sur un même projet brownfield comme une équipe stable :
 > reprendre l'état réel, ne rien casser, ne pas réinventer, laisser le projet repartable en < 10 min.
 
-État : **v1.1.0** · éprouvé sur **2 projets** (AgriConnect, où RELAY est né, et Tempow/DeepManagment) ·
-moteur portable propagé par script. Lis **[Forces & Limites](#forces--limites-lecture-honnête)** avant de te faire une idée.
+État : **v1.7.0** · éprouvé sur **2 projets** (AgriConnect, où RELAY est né, et Tempow/DeepManagment)
+\+ **agnosticité de stack prouvée par exécution** (sandbox Python) · moteur portable, **pur** (zéro donnée
+projet en dur) et **auto-distribué** (Update Advisor avec consentement). Lis **[Forces & Limites](#forces--limites-lecture-honnête)** avant de te faire une idée.
 
 ---
 
@@ -30,6 +31,13 @@ un **protocole d'ouverture/clôture** + des **garde-fous exécutables** (`relay-
   protocole qu'au **2ᵉ déclencheur indépendant + validation humaine**. Empêche le protocole de gonfler.
 - **Niveaux de confiance** : `[verified-run]` (exécuté) > `[verified-build]` (compilé/lu) — un fix
   sécurité « build-only » est signalé, pas maquillé.
+- **Update Advisor (l'humain décide)** : `relay-update.sh --check` prévisualise la mise à jour moteur
+  disponible **avec le delta de CHANGELOG** (les améliorations, pas juste un numéro) ; en terminal,
+  l'update normal **demande consentement** (`[o/N]`) avant d'appliquer — auto-bypassé en CI. Jamais
+  d'auto-update silencieux.
+- **Garde-fous externalisés à ta stack** : patterns de régression et règles de design-system vivent dans
+  `docs/.relay/rules.conf` (instance) — le moteur n'embarque **aucune** donnée projet, donc une mise à
+  jour ne peut jamais écraser ton état.
 
 ## Démarrage rapide
 
@@ -51,12 +59,15 @@ d'instance déjà présent. Ensuite : remplis `CLAUDE.md` (ou `SYSTEM.md`) + `do
 
 ```bash
 cd /chemin/vers/mon-projet
-./docs/scripts/relay-update.sh        # clone/pull le canonique, copie le MOTEUR seul
+./docs/scripts/relay-update.sh --check   # dry-run : montre la version dispo + le CHANGELOG, n'écrit rien
+./docs/scripts/relay-update.sh           # applique : en terminal, montre le delta puis demande [o/N]
 ```
 
 Localisation du canonique : `$RELAY_CANONICAL` → cache `~/.relay/canonical` (clone/pull depuis
-`CANONICAL_URL` de `docs/.relay-version`) → chemin local → sinon erreur explicite. La mise à jour
-**ne touche aucun fichier d'instance** et imprime le diff (`ancienne → nouvelle` version).
+`CANONICAL_URL` de `docs/.relay-version`) → chemin local → sinon erreur explicite. En mode normal et en
+**terminal**, si une mise à jour existe, RELAY affiche les entrées de CHANGELOG entre ta version et la
+nouvelle, puis attend **`[o/N]`** avant d'appliquer (bypass `--yes` / auto en CI). Le script **se met à
+jour lui-même** d'abord (bootstrapping), puis copie le **MOTEUR seul** — **aucun fichier d'instance touché**.
 
 ### Utiliser RELAY dans une session (la boucle quotidienne)
 
@@ -79,6 +90,7 @@ relay/
 ├── templates/     # graines des fichiers d'instance ({{PLACEHOLDERS}})
 ├── bin/           # relay-init.sh (bootstrap) · relay-update.sh (propagation)
 ├── docs/          # VISION.md, FRAMEWORK_SPEC.md (réf. du framework, NON propagées)
+├── CHANGELOG.md    # Keep a Changelog — source du delta affiché par relay-update --check
 └── VERSION
 ```
 
@@ -107,13 +119,21 @@ relay/
 - L'ancrage métier empêche un agent d'**inventer** une règle métier sensible (paie, RGPD, facturation).
 - Portable : moteur canonique + propagation par script ; les corrections atteignent tous les projets
   sans copier-coller (le mode de fonctionnement *avant* ce repo, qui faisait diverger les copies).
+- Moteur **pur + auto-distribué** : zéro donnée projet en dur (garde-fous dans `rules.conf` d'instance) ;
+  une correction de protocole se propage à tous les projets, et l'Update Advisor montre *ce qui change*
+  (CHANGELOG) avant d'appliquer avec consentement — la distribution n'est plus un copier-coller à l'aveugle.
 
 **Limites (à connaître pour ne pas surpromettre) :**
-- 🟠 **« LLM-agnostique » est REVENDIQUÉ, pas prouvé.** RELAY n'a été exécuté **qu'avec Claude**.
-  Aucune session réelle sous GPT/Gemini/Llama/autre. La portabilité multi-LLM est une **hypothèse**,
-  pas un fait. → c'est la contribution la plus utile qu'on puisse apporter (voir CONTRIBUTING).
-- 🟠 **N=2, même auteur, stack proche.** Éprouvé sur 2 projets du même auteur (ASP.NET + Flutter).
-  Aucune preuve cross-équipe / cross-stack / cross-domaine.
+- 🟠 **« LLM-agnostique » est REVENDIQUÉ, pas (encore) prouvé comportementalement.** RELAY n'a tourné en
+  session réelle **qu'avec Claude**. Un audit d'agnosticité *statique* existe (`docs/AGNOSTIC-SMOKE-TEST.md` :
+  zéro dépendance à un fournisseur dans le moteur), mais **aucune session agentique réelle sous
+  GPT/Gemini/DeepSeek** — **prévue après la stabilisation d'AgriConnect**. La portabilité multi-LLM reste
+  une hypothèse outillée, pas un fait. → la contribution la plus utile (voir CONTRIBUTING).
+- 🟠 **N=2 projets, même auteur ; cross-stack prouvé en *sandbox*, pas en projet réel.** Éprouvé en continu
+  sur 2 projets du même auteur (ASP.NET + Flutter). L'**agnosticité de stack** est désormais prouvée *par
+  exécution reproductible* sur un bac à sable Python/FastAPI (le moteur n'impose aucune règle .NET/Flutter ;
+  des règles Python custom s'appliquent) — mais **pas encore** sur un projet multi-sessions complet d'une
+  autre stack, ni cross-équipe / cross-domaine.
 - 🟠 **Les gates réduisent le risque, ils ne le suppriment pas.** Un agent *peut* bâcler un ancrage ou
   contourner par `--no-verify`. RELAY rend la triche **visible et coûteuse** ; il ne l'empêche pas
   mécaniquement. La qualité dépend de l'honnêteté de l'agent + de la vigilance humaine.
@@ -131,8 +151,8 @@ relay/
   + la porte de reçu apportent une preuve mécanique sur `[verified-run]` ; l'auto-déclenchement par hooks
   reste hors core — voir backlog T1, volontairement non livré car spécifique à Claude Code, donc en tension
   avec l'agnosticité revendiquée.)*
-- ⚪ **Jeune (v1.1), bash + Markdown, français-centré.** Le modèle de propagation est récent ; angles
-  connus dans le backlog (cf. `docs/rules/RELAY_FRAMEWORK_BACKLOG.md` chez un consommateur). i18n absente.
+- ⚪ **Jeune (v1.7), bash + Markdown, français-centré.** Le modèle de propagation a mûri (Update Advisor +
+  self-update + CHANGELOG) mais reste récent ; angles connus dans le backlog. i18n absente.
 
 ## Contribuer
 
@@ -149,7 +169,7 @@ mention de copyright, fourni « tel quel » sans garantie.
 ## `docs/.relay-version` (manifeste d'instance)
 
 ```
-1.1.0
+1.7.0
 PROJECT=MonProjet
 CANONICAL_URL=https://github.com/GitAmboudilaye/relay.git
 INSTALLED=2026-06-12
