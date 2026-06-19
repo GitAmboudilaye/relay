@@ -123,6 +123,9 @@ render "$TEMPLATES/docs/rules/KNOWN_ISSUES.md"        "docs/rules/KNOWN_ISSUES.m
 # seedées ici UNE fois, puis propriété du projet — relay-update.sh ne les réécrit JAMAIS.
 render "$TEMPLATES/docs/rules/RELAY_METRICS.md"       "docs/rules/RELAY_METRICS.md"
 render "$TEMPLATES/docs/rules/RELAY_RULE_POOL.md"     "docs/rules/RELAY_RULE_POOL.md"
+# SECURITY_RULES.md = checklist d'ancrage sécu (Couche 2). Donnée d'instance, chargée
+# SÉLECTIVEMENT (relay-check §9b la signale quand une surface sensible est touchée).
+render "$TEMPLATES/docs/rules/SECURITY_RULES.md"      "docs/rules/SECURITY_RULES.md"
 # rules.conf = règles d'instance du Regression Shield. Déposé commenté → Shield inactif
 # tant que le projet n'a pas déclaré ses patterns. Donnée d'instance, jamais propagée.
 render "$TEMPLATES/docs/.relay/rules.conf"            "docs/.relay/rules.conf"

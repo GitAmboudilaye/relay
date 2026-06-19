@@ -92,6 +92,20 @@ Avant toute implémentation à logique métier, écrire dans le `TASK[]` :
 `relay-check.sh` **bloque** le commit si une tâche `owner=session` débloquée contient des mots-clés
 métier sans bloc `ANCRAGE:`.
 
+### 4b. Ancrage sécu SÉLECTIF (rôle cybersécurité — Couche 2)
+
+Le LLM est la couche faible : on ne lui demande **pas** de juger sa propre sécurité en permanence (excès
+de confiance + inflation de tokens). À la place, un **grep déterministe** (`[security_surface]` de
+`rules.conf`) détecte quand le diff touche une **surface sensible** (authN, authZ/IDOR, secrets, crypto,
+SQL, upload, désérialisation). `relay-check.sh` (§9b) émet alors **un avertissement signal-only** invitant
+à charger la checklist **`docs/rules/SECURITY_RULES.md`** et à écrire `SECURITY_ANCHOR:` dans le `TASK[]`.
+
+- **Sélectif = token-négatif** : la checklist n'est chargée **que** si la surface est touchée — jamais en
+  permanence. Le grep fait gratuitement le tri que le LLM ferait en lisant.
+- **WARNING, pas bloquant** : la détection de surface est heuristique (faux positifs) → elle guide, ne gate
+  pas. Le verdict reste humain. *(Le gate dur, lui, est la Couche 1 `[security_forbidden]` — secrets évidents.)*
+- **Lucidité** : gate commit/CI, **pas** un IDS/WAF runtime ; ne remplace pas un pentest.
+
 ---
 
 ## 5. Escalade métier (Pilier 9)

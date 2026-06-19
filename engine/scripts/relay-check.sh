@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # relay-check.sh v3.7 — Validation structure + contenu + commits + clôture NEXT_SESSION.md
 # + Security Shield (piloté par rules.conf, sections [security_forbidden] BLOQUANT / [security_warn] — v1.8.0)
+# + Security Surface Trigger (ancrage sécu sélectif — section [security_surface], WARNING signal-only — v1.10.0)
 # + Porte de reçu (v1.2.0) : `[verified-run:<hash>]` exige un reçu relay-run.sh existant (sinon ERREUR)
 # + Skew check (signal-only) : alerte si moteur d'instance < canonique localisable
 # + Design System Shield (piloté par rules.conf, sections [design_warn_*] — v1.4.0)
@@ -738,6 +739,48 @@ if [ -n "$SEC_STAGED" ]; then
   scan_security_section "$SEC_STAGED" "security_warn"      "warn"
   if [ "$SEC_SECTIONS_ACTIVE" -gt 0 ] && [ "$SEC_ERRORS" -eq 0 ] && [ "$SEC_WARNINGS" -eq 0 ]; then
     $SCORE_ONLY || echo "[RELAY] ✅ Security Shield : aucun pattern de sécurité détecté"
+  fi
+fi
+
+# ── 9b. Security Surface Trigger — ancrage sécu SÉLECTIF (Couche 2, v1.10.0) ──
+# Réutilise le grep déterministe de la Couche 1 (parse_security_section) sur une 3ᵉ section,
+# [security_surface], dont les patterns sont des MARQUEURS de zone sensible (auth, secrets,
+# crypto, IDOR…) — PAS des dangers. Si le diff stagé en touche un → UN avertissement
+# « ancrer SECURITY_RULES.md » : c'est le déclencheur qui rend l'ancrage sécu sélectif
+# (checklist chargée seulement si surface touchée → token-négatif, VISION.md §4).
+# Sévérité = WARNING signal-only (n'altère JAMAIS l'exit code) : le grep de surface est
+# heuristique (faux positifs assumés) → guider, jamais bloquer. Le verdict reste humain.
+# LUCIDITÉ : gate commit/CI, PAS un IDS/WAF runtime — ne remplace pas un pentest.
+if [ -n "$SEC_STAGED" ]; then
+  parse_security_section "security_surface"
+  $SCORE_ONLY || echo ""
+  $SCORE_ONLY || echo "── Security Surface Trigger ──"
+  if [ "${#SEC_PAT[@]}" -eq 0 ]; then
+    $SCORE_ONLY || echo "[RELAY] ⚠️  Security Surface Trigger inactif : section [security_surface] absente/vide dans $RULES_CONF"
+    WARNINGS=$((WARNINGS + 1))
+  else
+    SURFACE_HITS=""
+    for i in "${!SEC_PAT[@]}"; do
+      pattern="${SEC_PAT[$i]}"; cat_label="${SEC_MSG[$i]}"; excl="${SEC_EXCL[$i]}"; exclpath="${SEC_EXCLPATH[$i]}"
+      while IFS= read -r f; do
+        [ ! -f "$f" ] && continue
+        [ -n "$exclpath" ] && [[ "$f" == *"$exclpath"* ]] && continue
+        added=$(git diff --cached -- "$f" 2>/dev/null | grep "^+" | grep -vE "^\+\+\+" | grep -E -e "$pattern" 2>/dev/null || true)
+        if [ -n "$excl" ] && [ -n "$added" ]; then
+          added=$(echo "$added" | grep -vE -e "$excl" 2>/dev/null || true)
+        fi
+        [ -n "$added" ] && SURFACE_HITS="$SURFACE_HITS${cat_label:-surface sensible}"$'\n'
+      done <<< "$SEC_STAGED"
+    done
+    SURFACE_CATS=$(printf '%s' "$SURFACE_HITS" | grep -v '^$' | sort -u | paste -sd', ' - 2>/dev/null || true)
+    if [ -n "$SURFACE_CATS" ]; then
+      $SCORE_ONLY || echo "[RELAY] ⚠️  Surface sensible touchée ($SURFACE_CATS)"
+      $SCORE_ONLY || echo "[RELAY]    → ancrer la checklist docs/rules/SECURITY_RULES.md (Couche 2) + écrire SECURITY_ANCHOR: dans le TASK[]"
+      $SCORE_ONLY || echo "[RELAY]    (signal-only — n'altère pas l'exit ; heuristique, gate commit/CI ≠ pentest)"
+      WARNINGS=$((WARNINGS + 1))
+    else
+      $SCORE_ONLY || echo "[RELAY] ✅ Security Surface Trigger : aucune surface sensible dans le diff stagé (${#SEC_PAT[@]} marqueur(s) actif(s))"
+    fi
   fi
 fi
 

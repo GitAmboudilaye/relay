@@ -11,6 +11,31 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.10.0] — 2026-06-19
+
+### Added
+- **Security Surface Trigger** — rôle « Spécialiste cybersécurité », **Couche 2** (ancrage sécu sélectif,
+  `SEC-2`). `relay-check.sh` (§9b) lit une 3ᵉ section `rules.conf` `[security_surface]` : des **marqueurs**
+  de surface sensible (authN, authZ/IDOR, secrets, crypto, + per-stack commentés — **pas** des dangers).
+  Touchés dans le diff stagé → **un avertissement signal-only** « ancrer `SECURITY_RULES.md` ». C'est le
+  déclencheur **déterministe** qui rend l'ancrage sécu **sélectif** : la checklist n'est chargée **que** si
+  une surface est touchée → **token-négatif** (`VISION.md §4`), jamais en permanence. Réutilise le grep de
+  la Couche 1 (`parse_security_section`).
+- **`templates/docs/rules/SECURITY_RULES.md`** — checklist d'ancrage (5 axes : authN / authZ-IDOR /
+  validation / secrets / moindre-privilège + exemples per-stack .NET/Flutter/JS/Python + section
+  `Patterns appris` réservée à la Couche 4 `SEC-4`). Fichier d'**instance** (propriété du projet).
+- `relay-init.sh` — `render` de `SECURITY_RULES.md` au bootstrap.
+- `relay-update.sh` (§2f, migration v1.10.0) — **seede** la section `[security_surface]` **et** dépose
+  `SECURITY_RULES.md` dans les projets existants si absents (miroir des migrations §2b→§2e). Idempotent.
+- `RELAY_PROTOCOL.md §4b` — formalise l'ancrage sécu sélectif (sélectif = token-négatif ; WARNING, pas
+  bloquant car détection heuristique ; le gate dur reste la Couche 1).
+- `.github/workflows/ci.yml` (canonique) — le smoke-test vérifie que `relay-init` dépose `SECURITY_RULES.md`
+  et seede la section `[security_surface]` dans `rules.conf`.
+
+### Lucidité
+- Couche 2 reste un **gate commit/CI**, **pas** un IDS/WAF runtime — ne remplace pas un pentest. WARNING
+  signal-only (heuristique → guide, ne gate pas). Le verdict reste humain.
+
 ## [1.9.0] — 2026-06-19
 
 ### Added
