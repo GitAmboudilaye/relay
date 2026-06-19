@@ -112,7 +112,12 @@ règle métier sensible (paie, congé, facturation, sécurité…).
 □5 NEXT_SESSION.md §fait / §reste / §plan à jour, et ≤ 200 lignes (archiver dans SESSIONS_ARCHIVE.md si besoin)
 □6 relay-check.sh → Health Score ≥ 80
 □7 git commit (+ push si l'user le demande)
+□8 si bump VERSION (canonique uniquement) → entrée CHANGELOG.md ajoutée (Keep a Changelog)
 ```
+
+> **□8 ne concerne que le dépôt canonique RELAY** : tout bump de `VERSION` doit s'accompagner d'une
+> entrée `CHANGELOG.md` (source unique du delta affiché par `relay-update.sh --check` aux consommateurs).
+> Les projets consommateurs ne bumpent pas `VERSION` (ils la reçoivent par propagation) → □8 = N/A.
 
 ---
 
