@@ -11,6 +11,16 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.8.1] — 2026-06-19
+
+### Added
+- `relay-update.sh` (§2d, migration v1.8.0) — **seeding des sections sécu dans les `rules.conf` existants**
+  (`SEC-1b`). Un projet initialisé **avant** v1.8.0 n'avait pas `[security_forbidden]`/`[security_warn]` ;
+  à la prochaine mise à jour, ces sections sont **ajoutées** (patterns universels actifs + per-stack
+  commentés), idempotent au niveau section (si déjà présentes → intactes, données d'instance). Sans ce
+  seeding, le Security Shield ne touchait que les **nouveaux** projets. Miroir exact des migrations
+  v1.3.0 (`[forbidden_patterns]`) et v1.4.0 (`[design_warn_*]`).
+
 ## [1.8.0] — 2026-06-19
 
 ### Added
