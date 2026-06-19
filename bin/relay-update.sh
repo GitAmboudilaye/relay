@@ -20,12 +20,63 @@
 
 set -euo pipefail
 
+# ── 0. Arguments (AVANT le garde projet : --help/--check doivent marcher partout) ─
+#   --check : dry-run en LECTURE SEULE — localise le canonique, compare les versions et,
+#             si retard, affiche les entrées CHANGELOG entre les deux. N'écrit AUCUN
+#             fichier d'instance, sort 0. Scriptable, offline-safe (la détection distante
+#             vit ICI, jamais dans relay-check : chemin de commit rapide + 2G terrain).
+CHECK_ONLY=false
+for arg in "$@"; do
+  case "$arg" in
+    --check) CHECK_ONLY=true ;;
+    -h|--help)
+      echo "Usage: relay-update.sh [--check]"
+      echo "  (sans option) : propage le moteur canonique dans ce projet (écrit)."
+      echo "  --check       : dry-run lecture seule — affiche la mise à jour disponible + le changelog."
+      exit 0 ;;
+    *) echo "[RELAY-UPDATE] ⚠️  option inconnue : $arg (ignorée)" ;;
+  esac
+done
+
 VERSION_FILE="docs/.relay-version"
 [ -f "$VERSION_FILE" ] || { echo "[RELAY-UPDATE] ❌ $VERSION_FILE introuvable — lancer depuis la racine d'un projet initialisé RELAY"; exit 1; }
 
 OLD_VERSION=$(grep -oE "[0-9]+\.[0-9]+\.[0-9]+" "$VERSION_FILE" 2>/dev/null | head -1 || echo "0.0.0")
 CANONICAL_URL=$(grep -E "^CANONICAL_URL=" "$VERSION_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true)
 PROJECT_NAME=$(grep -E "^PROJECT=" "$VERSION_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true)
+
+# ── Helpers de version & changelog (utilisés par --check) ─────────────────────
+# Comparaison sémantique X.Y.Z purement numérique (même tri que compute_skew de relay-check).
+ver_gt() {  # ver_gt A B → vrai (0) ssi A > B
+  [ "$1" = "$2" ] && return 1
+  local lower
+  lower=$(printf '%s\n%s\n' "$1" "$2" | sort -t. -k1,1n -k2,2n -k3,3n | head -1)
+  [ "$lower" = "$2" ]   # B est la plus basse → A > B
+}
+
+print_changelog_section() {  # fichier, version → imprime le bloc "## [version] …"
+  awk -v v="$2" '
+    $0 ~ "^## \\[" v "\\]" { inblk=1; print; next }
+    inblk && /^## \[/ { exit }
+    inblk { print }
+  ' "$1"
+}
+
+print_changelog_delta() {  # fichier, from, to → imprime les sections from < v <= to
+  local file="$1" from="$2" to="$3" v shown=0
+  [ -f "$file" ] || { echo "  (CHANGELOG.md absent du canonique — pas de détail des améliorations)"; return 0; }
+  while read -r v; do
+    if ver_gt "$v" "$from" && ! ver_gt "$v" "$to"; then
+      print_changelog_section "$file" "$v"
+      echo ""
+      shown=1
+    fi
+  done < <(grep -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' "$file" \
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' \
+            | sort -t. -k1,1n -k2,2n -k3,3n -r)
+  [ "$shown" -eq 0 ] && echo "  (aucune entrée de changelog entre v$from et v$to)"
+  return 0
+}
 
 # ── 1. Localiser la racine canonique ─────────────────────────────────────────
 CANON_ROOT=""
@@ -67,6 +118,26 @@ if ! locate_canonical; then
 fi
 
 NEW_VERSION=$(grep -oE "[0-9]+\.[0-9]+\.[0-9]+" "$CANON_ROOT/VERSION" 2>/dev/null | head -1 || echo "0.0.0")
+
+# ── 1b. Mode --check : dry-run LECTURE SEULE (ne copie rien, n'écrit pas .relay-version) ─
+if $CHECK_ONLY; then
+  echo ""
+  echo "[RELAY-UPDATE] ════════════════════════════════════════"
+  if [ "$OLD_VERSION" = "$NEW_VERSION" ]; then
+    echo "[RELAY-UPDATE] ✅ À jour — moteur v$OLD_VERSION = canonique v$NEW_VERSION (rien à faire)."
+  elif ver_gt "$NEW_VERSION" "$OLD_VERSION"; then
+    echo "[RELAY-UPDATE] ⬆️  Mise à jour disponible : v$OLD_VERSION → v$NEW_VERSION"
+    echo "[RELAY-UPDATE] ── Améliorations apportées (CHANGELOG) ──"
+    print_changelog_delta "$CANON_ROOT/CHANGELOG.md" "$OLD_VERSION" "$NEW_VERSION"
+    echo "[RELAY-UPDATE] ▶ Pour appliquer : relancer SANS --check."
+  else
+    echo "[RELAY-UPDATE] ℹ️  Moteur local v$OLD_VERSION en avance sur le canonique v$NEW_VERSION (rien à faire)."
+  fi
+  echo "[RELAY-UPDATE] (dry-run — aucun fichier modifié)"
+  echo "[RELAY-UPDATE] ════════════════════════════════════════"
+  exit 0
+fi
+
 ENGINE_SCRIPTS="$CANON_ROOT/engine/scripts"
 ENGINE_RULES="$CANON_ROOT/engine/rules"
 for d in "$ENGINE_SCRIPTS" "$ENGINE_RULES"; do
