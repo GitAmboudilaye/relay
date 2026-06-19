@@ -127,6 +127,18 @@ render "$TEMPLATES/docs/rules/RELAY_RULE_POOL.md"     "docs/rules/RELAY_RULE_POO
 # tant que le projet n'a pas déclaré ses patterns. Donnée d'instance, jamais propagée.
 render "$TEMPLATES/docs/.relay/rules.conf"            "docs/.relay/rules.conf"
 
+# Workflow CI RELAY (SEC-3, Couche 3) : gate structure (relay-check --strict) + secrets (gitleaks).
+# Générique (0 donnée projet) mais déposé à un chemin d'instance → copie-si-absente directe
+# (PAS via render() : le YAML GitHub Actions contient ${{ }}, à ne pas faire passer dans awk).
+CI_WORKFLOW=".github/workflows/relay-ci.yml"
+if [ -f "$CI_WORKFLOW" ]; then
+  echo "[RELAY-INIT] ⏭️  $CI_WORKFLOW existe déjà — NON écrasé (fichier d'instance)"
+elif [ -f "$TEMPLATES/.github/workflows/relay-ci.yml" ]; then
+  mkdir -p .github/workflows
+  cp "$TEMPLATES/.github/workflows/relay-ci.yml" "$CI_WORKFLOW"
+  echo "[RELAY-INIT] ✅ $CI_WORKFLOW généré (CI : relay-check --strict + gitleaks)"
+fi
+
 # ── 3. Manifeste docs/.relay-version ─────────────────────────────────────────
 {
   echo "$VERSION"

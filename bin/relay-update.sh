@@ -329,6 +329,21 @@ SECCONF
   SEEDED_SEC=1
 fi
 
+# ── 2e. Migration CI RELAY (≥ v1.9.0) — workflow GitHub Actions (SEC-3, Couche 3) ────
+# Depuis v1.9.0, relay-init dépose .github/workflows/relay-ci.yml (gate structure
+# relay-check --strict + secrets gitleaks). Un projet initialisé AVANT v1.9.0 n'a pas
+# ce workflow → on le seede ici depuis le template canonique. Idempotent : ne touche
+# JAMAIS un workflow déjà présent (fichier d'instance que le projet a pu personnaliser).
+# Source = templates/ (pas engine/) : c'est un fichier d'instance, pas un fichier moteur.
+CI_WORKFLOW=".github/workflows/relay-ci.yml"
+CI_TEMPLATE="$CANON_ROOT/templates/.github/workflows/relay-ci.yml"
+SEEDED_CI=0
+if [ ! -f "$CI_WORKFLOW" ] && [ -f "$CI_TEMPLATE" ]; then
+  mkdir -p .github/workflows
+  cp "$CI_TEMPLATE" "$CI_WORKFLOW"
+  SEEDED_CI=1
+fi
+
 # ── 3. Mettre à jour docs/.relay-version (conserve PROJECT/CANONICAL_URL d'instance) ─
 {
   echo "$NEW_VERSION"
@@ -358,6 +373,10 @@ fi
 if [ "$SEEDED_SEC" -eq 1 ]; then
   echo "[RELAY-UPDATE] 🌱 Migration v1.8.0 : sections [security_*] ajoutées à $RULES_CONF (Security Shield activé — patterns universels)"
   echo "[RELAY-UPDATE]    (relisez/adaptez à votre stack ; décommentez les patterns per-stack pertinents). Gate commit/CI, pas un pentest."
+fi
+if [ "$SEEDED_CI" -eq 1 ]; then
+  echo "[RELAY-UPDATE] 🌱 Migration v1.9.0 : $CI_WORKFLOW déposé (CI : relay-check --strict + gitleaks — SEC-3, Couche 3)"
+  echo "[RELAY-UPDATE]    (fichier d'instance : adaptez-le ; gitleaks-action nécessite GITLEAKS_LICENSE pour une organisation)."
 fi
 echo "[RELAY-UPDATE] ℹ️  Aucun autre fichier d'instance touché (NEXT_SESSION.md, docs/context/*, KNOWN_ISSUES.md…)."
 echo "[RELAY-UPDATE] ════════════════════════════════════════"

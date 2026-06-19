@@ -1,0 +1,45 @@
+name: RELAY CI
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Gate CI RELAY — Couche 3 du rôle « Spécialiste cybersécurité » (SEC-3).
+# Déposé par relay-init (et seedé dans les projets existants par relay-update).
+# Fichier d'INSTANCE : adaptez-le à votre projet (il vous appartient, relay-update
+# ne l'écrase jamais une fois présent).
+#
+# Division des responsabilités (honnête, pas de double emploi) :
+#   • relay-check --strict = gate STRUCTURE / PROTOCOLE (NEXT_SESSION valide, densité,
+#       skew moteur). Le Security Shield (§9) scanne le diff STAGÉ → il vit au commit
+#       (hook pre-commit local), PAS ici : en CI rien n'est « staged ».
+#   • gitleaks = le vrai verdict OUTIL sur les SECRETS (scan PR + historique), 0 token LLM.
+#
+# LUCIDITÉ : gate commit/CI, PAS un IDS/WAF runtime — ne remplace pas un pentest.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  relay-gate:
+    name: RELAY gate (structure + secrets)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # historique complet : requis par gitleaks (scan full repo)
+
+      # 1. Gate structure / protocole — exit 1 sur erreur (verdict mécanique, pas avis LLM).
+      - name: RELAY check (--strict)
+        run: |
+          chmod +x ./docs/scripts/relay-check.sh
+          ./docs/scripts/relay-check.sh --strict
+
+      # 2. Détection de secrets — verdict outil déterministe (la « réactivité » réelle).
+      #    gitleaks-action v2 : gratuit pour les comptes perso et dépôts publics ;
+      #    une organisation a besoin d'un GITLEAKS_LICENSE (voir la doc de l'action).
+      - name: gitleaks (secret scan)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
