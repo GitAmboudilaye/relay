@@ -46,4 +46,11 @@ jobs:
           if grep -rl '{{' . --include='*.md' | grep -v out.txt; then
             echo "::error::placeholder {{...}} non substitué après relay-init"; exit 1
           fi
-          echo "✅ bootstrap + relay-check OK"
+          # SEC-3 : relay-init doit déposer le workflow CI RELAY, et ce doit être un YAML valide.
+          WF=".github/workflows/relay-ci.yml"
+          [ -f "$WF" ] || { echo "::error::$WF absent après relay-init (SEC-3)"; exit 1; }
+          python3 -c "import yaml,sys; yaml.safe_load(open('$WF'))" \
+            || { echo "::error::$WF n'est pas un YAML valide"; exit 1; }
+          grep -q 'relay-check.sh --strict' "$WF" || { echo "::error::$WF ne lance pas relay-check --strict"; exit 1; }
+          grep -q 'gitleaks' "$WF"                 || { echo "::error::$WF ne lance pas gitleaks"; exit 1; }
+          echo "✅ bootstrap + relay-check + workflow CI (SEC-3) OK"

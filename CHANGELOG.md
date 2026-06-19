@@ -11,6 +11,23 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.9.0] — 2026-06-19
+
+### Added
+- **Workflow CI RELAY** (`templates/.github/workflows/relay-ci.yml`) — rôle « Spécialiste cybersécurité »,
+  **Couche 3** (outillage CI, `SEC-3`). Gate déposé dans chaque projet : `relay-check --strict` (verdict
+  **structure/protocole** mécanique) + **gitleaks** (verdict **outil** sur les secrets, scan PR + historique,
+  0 token LLM). Division honnête : le Security Shield (§9) scanne le diff **stagé** → il vit au commit (hook
+  pre-commit local), pas en CI ; la CI ajoute le scan secrets sur tout le dépôt. **Lucidité** : gate CI, **pas**
+  un IDS/WAF runtime — ne remplace pas un pentest.
+- `relay-init.sh` — dépose `.github/workflows/relay-ci.yml` au bootstrap (copie-si-absente ; fichier
+  d'**instance**, jamais écrasé). Pas via `render()` : le YAML GitHub Actions contient `${{ }}`.
+- `relay-update.sh` (§2e, migration v1.9.0) — **seede le workflow dans les projets existants** s'il est
+  absent (miroir des migrations §2b/§2c/§2d). Idempotent : un workflow déjà présent reste intact. Sans ce
+  seeding, seuls les **nouveaux** projets auraient eu la CI.
+- `.github/workflows/ci.yml` (repo canonique) — le smoke-test vérifie désormais que `relay-init` dépose le
+  workflow, que c'est un **YAML valide**, et qu'il invoque bien `relay-check --strict` + `gitleaks`.
+
 ## [1.8.1] — 2026-06-19
 
 ### Added
