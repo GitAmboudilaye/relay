@@ -26,13 +26,19 @@ set -euo pipefail
 #             fichier d'instance, sort 0. Scriptable, offline-safe (la détection distante
 #             vit ICI, jamais dans relay-check : chemin de commit rapide + 2G terrain).
 CHECK_ONLY=false
+ASSUME_YES=false   # T6-3 : bypass du prompt accept/décline (CI/hook/pipeline)
 for arg in "$@"; do
   case "$arg" in
     --check) CHECK_ONLY=true ;;
+    -y|--yes|--non-interactive) ASSUME_YES=true ;;
     -h|--help)
-      echo "Usage: relay-update.sh [--check]"
-      echo "  (sans option) : propage le moteur canonique dans ce projet (écrit)."
-      echo "  --check       : dry-run lecture seule — affiche la mise à jour disponible + le changelog."
+      echo "Usage: relay-update.sh [--check] [--yes|--non-interactive]"
+      echo "  (sans option)        : propage le moteur canonique dans ce projet (écrit)."
+      echo "                         Si une mise à jour est dispo et qu'on est en terminal (TTY),"
+      echo "                         affiche le changelog et demande confirmation [o/N]."
+      echo "  --check              : dry-run lecture seule — affiche la mise à jour dispo + le changelog."
+      echo "  --yes, -y,           : applique sans demander (pour CI/hooks/pipelines). Implicite aussi"
+      echo "  --non-interactive      quand l'entrée n'est pas un terminal (auto-détection [ -t 0 ])."
       exit 0 ;;
     *) echo "[RELAY-UPDATE] ⚠️  option inconnue : $arg (ignorée)" ;;
   esac
@@ -138,6 +144,37 @@ if $CHECK_ONLY; then
   exit 0
 fi
 
+# ── 1b2. Prompt accept/décline (T6-3) — run normal, AVANT toute écriture ───────
+# Décision user (2026-06-18, escalade §3) : DÉFAUT TTY interactif + BYPASS CI.
+# On réutilise print_changelog_delta (déjà écrit pour --check) pour montrer les
+# améliorations AVANT d'appliquer, puis on attend [o/N]. Placé AVANT le self-update
+# §1c → AUCUN fichier (pas même relay-update.sh lui-même) n'est touché sans « oui ».
+#   • Sauté si pas de mise à jour (OLD == NEW, ou local en avance) : rien à confirmer.
+#   • Sauté en non-interactif : --yes/--non-interactive OU pas de TTY ([ ! -t 0 ] :
+#     hook/pipeline/CI) → application automatique, jamais bloquante.
+#   • Idempotent à travers le re-exec du self-update : la confirmation est propagée
+#     en stage 2 via RELAY_UPDATE_CONFIRMED=1 → JAMAIS de double prompt.
+CONFIRMED_FOR_REEXEC="${RELAY_UPDATE_CONFIRMED:-0}"
+if [ "$CONFIRMED_FOR_REEXEC" != "1" ] && ver_gt "$NEW_VERSION" "$OLD_VERSION"; then
+  echo ""
+  echo "[RELAY-UPDATE] ⬆️  Mise à jour disponible : v$OLD_VERSION → v$NEW_VERSION"
+  echo "[RELAY-UPDATE] ── Améliorations apportées (CHANGELOG) ──"
+  print_changelog_delta "$CANON_ROOT/CHANGELOG.md" "$OLD_VERSION" "$NEW_VERSION"
+  if $ASSUME_YES; then
+    echo "[RELAY-UPDATE] ✔ --yes / non-interactif demandé : application sans confirmation."
+  elif [ ! -t 0 ]; then
+    echo "[RELAY-UPDATE] ✔ Entrée non interactive (pas de TTY) : application automatique (CI/hook)."
+  else
+    printf "[RELAY-UPDATE] Appliquer cette mise à jour ? [o/N] "
+    read -r _reply || _reply=""   # EOF (Ctrl-D) sous set -e → traité comme « non »
+    case "$_reply" in
+      o|O|oui|OUI|y|Y|yes|YES) echo "[RELAY-UPDATE] ▶ Application…" ;;
+      *) echo "[RELAY-UPDATE] ✖ Mise à jour refusée — aucun fichier modifié. (relancez quand vous voulez)"; exit 0 ;;
+    esac
+  fi
+  CONFIRMED_FOR_REEXEC=1
+fi
+
 # ── 1c. Self-update bootstrapping (§1b) — stage 1 → re-exec stage 2 ────────────
 # relay-update.sh vit dans bin/ (canonique) et docs/scripts/ (consommateur, déposé
 # par relay-init). La boucle de copie (§2) ne propage QUE engine/scripts/*.sh →
@@ -164,7 +201,8 @@ if [ "${RELAY_SELFUPDATE_STAGE2:-0}" != "1" ] \
   echo "[RELAY-UPDATE]    canonique puis relance avec la logique de migration à jour."
   cp "$CANON_UPDATE" "$RUNNING_SCRIPT"
   chmod +x "$RUNNING_SCRIPT" 2>/dev/null || true
-  RELAY_SELFUPDATE_STAGE2=1 exec "$RUNNING_SCRIPT" "$@"
+  # T6-3 : propager le consentement déjà obtenu (§1b2) → stage 2 ne re-demande pas.
+  RELAY_SELFUPDATE_STAGE2=1 RELAY_UPDATE_CONFIRMED="$CONFIRMED_FOR_REEXEC" exec "$RUNNING_SCRIPT" "$@"
 fi
 
 ENGINE_SCRIPTS="$CANON_ROOT/engine/scripts"

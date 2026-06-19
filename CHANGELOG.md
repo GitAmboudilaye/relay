@@ -11,6 +11,19 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.7.0] — 2026-06-19
+
+### Added
+- `relay-update.sh` : **prompt accept/décline** (T6-3) en run normal. Quand une mise à jour est
+  disponible et que l'on est en terminal (TTY), le script affiche le delta de `CHANGELOG.md`
+  (réutilise `print_changelog_delta`) **avant d'appliquer**, puis attend `[o/N]` ; un refus sort
+  `0` sans modifier le moindre fichier. Le prompt est placé **avant** le self-update §1c — rien,
+  pas même `relay-update.sh` lui-même, n'est touché sans consentement.
+- `relay-update.sh` : bypass non-interactif `--yes` / `-y` / `--non-interactive`, **et** auto-détection
+  `[ -t 0 ]` → application automatique sans blocage en CI, hooks et pipelines (jamais de prompt
+  suspendu). La confirmation obtenue est propagée à travers le re-exec du self-update
+  (`RELAY_UPDATE_CONFIRMED=1`) → jamais de double demande.
+
 ## [1.6.0] — 2026-06-19
 
 ### Fixed
@@ -110,7 +123,8 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
   (compteurs) et `RELAY_RULE_POOL.md` (registre human-gated) reclassés TEMPLATE seed-once
   → un update n'écrase plus aucune donnée de projet.
 
-[Non publié]: https://github.com/GitAmboudilaye/relay/compare/v1.6.0...HEAD
+[Non publié]: https://github.com/GitAmboudilaye/relay/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/GitAmboudilaye/relay/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/GitAmboudilaye/relay/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/GitAmboudilaye/relay/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/GitAmboudilaye/relay/compare/v1.3.0...v1.4.0
