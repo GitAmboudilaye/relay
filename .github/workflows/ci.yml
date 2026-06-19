@@ -53,4 +53,9 @@ jobs:
             || { echo "::error::$WF n'est pas un YAML valide"; exit 1; }
           grep -q 'relay-check.sh --strict' "$WF" || { echo "::error::$WF ne lance pas relay-check --strict"; exit 1; }
           grep -q 'gitleaks' "$WF"                 || { echo "::error::$WF ne lance pas gitleaks"; exit 1; }
-          echo "✅ bootstrap + relay-check + workflow CI (SEC-3) OK"
+          # SEC-2 : relay-init doit déposer la checklist SECURITY_RULES.md (ancrage sélectif, Couche 2)
+          # et la section [security_surface] doit être présente dans rules.conf (marqueurs de surface).
+          [ -f docs/rules/SECURITY_RULES.md ] || { echo "::error::docs/rules/SECURITY_RULES.md absent après relay-init (SEC-2)"; exit 1; }
+          grep -qE '^\[security_surface\]' docs/.relay/rules.conf \
+            || { echo "::error::section [security_surface] absente de rules.conf (SEC-2)"; exit 1; }
+          echo "✅ bootstrap + relay-check + workflow CI (SEC-3) + ancrage sécu sélectif (SEC-2) OK"

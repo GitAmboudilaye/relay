@@ -344,6 +344,45 @@ if [ ! -f "$CI_WORKFLOW" ] && [ -f "$CI_TEMPLATE" ]; then
   SEEDED_CI=1
 fi
 
+# ── 2f. Migration Security Surface Trigger (≥ v1.10.0) — ancrage sécu sélectif (SEC-2) ─
+# Depuis v1.10.0, relay-check (§9b) lit une 3ᵉ section [security_surface] : des MARQUEURS de
+# zone sensible (auth, secrets, crypto, IDOR) qui, touchés dans le diff, déclenchent un
+# avertissement « ancrer SECURITY_RULES.md » (chargement sélectif → token-négatif). On seede
+# (a) la section [security_surface] dans rules.conf si absente, et (b) le doc SECURITY_RULES.md
+# si absent. Idempotent : ne touche jamais une section/un fichier déjà présents (instance).
+SEEDED_SURFACE=0
+if [ -f "$RULES_CONF" ] && ! grep -qE '^\[security_surface\]' "$RULES_CONF" 2>/dev/null; then
+  cat >> "$RULES_CONF" <<'SURFCONF'
+
+# ── Security Surface Trigger (seedé par relay-update v1.10.0) ────────────────
+# Patterns = MARQUEURS de surface sensible (PAS des dangers). Touchés dans le diff stagé →
+# relay-check (§9b) émet UN avertissement « ancrer SECURITY_RULES.md » (ancrage sélectif).
+# Sévérité = WARNING signal-only. msg= sert d'étiquette de catégorie. Adaptez/élaguez.
+[security_surface]
+[Aa]uthenticat|[Ll]ogin\b|[Ss]ign[_-]?in\b              | msg=authN (authentification)
+[Aa]uthoriz|[Rr]ole[s]?\b|[Pp]ermission                 | msg=authZ (autorisation / IDOR)
+[Pp]assword|[Ss]ecret|[Tt]oken|[Aa]pi[_-]?key           | msg=secrets / identité
+[Cc]rypt|[Cc]ipher|\b[Jj]wt\b|\b[Hh]ash\b               | msg=crypto
+# Per-stack (décommenter) :
+# \b(SELECT|INSERT|UPDATE|DELETE)\b                      | msg=accès données (injection / IDOR)
+# \[Authorize                                            | msg=authZ .NET
+# (UploadedFile|MultipartFile|req\.files|request\.files) | msg=upload de fichier
+# (pickle\.loads|yaml\.load\b|unserialize)               | msg=désérialisation
+SURFCONF
+  SEEDED_SURFACE=1
+fi
+
+# (b) Déposer SECURITY_RULES.md (checklist d'instance) si absent. Source = templates/ (fichier
+# d'instance, pas moteur) → copie directe, jamais via la boucle de propagation moteur.
+SECRULES="docs/rules/SECURITY_RULES.md"
+SECRULES_TEMPLATE="$CANON_ROOT/templates/docs/rules/SECURITY_RULES.md"
+SEEDED_SECRULES=0
+if [ ! -f "$SECRULES" ] && [ -f "$SECRULES_TEMPLATE" ]; then
+  mkdir -p docs/rules
+  cp "$SECRULES_TEMPLATE" "$SECRULES"
+  SEEDED_SECRULES=1
+fi
+
 # ── 3. Mettre à jour docs/.relay-version (conserve PROJECT/CANONICAL_URL d'instance) ─
 {
   echo "$NEW_VERSION"
@@ -377,6 +416,13 @@ fi
 if [ "$SEEDED_CI" -eq 1 ]; then
   echo "[RELAY-UPDATE] 🌱 Migration v1.9.0 : $CI_WORKFLOW déposé (CI : relay-check --strict + gitleaks — SEC-3, Couche 3)"
   echo "[RELAY-UPDATE]    (fichier d'instance : adaptez-le ; gitleaks-action nécessite GITLEAKS_LICENSE pour une organisation)."
+fi
+if [ "$SEEDED_SURFACE" -eq 1 ]; then
+  echo "[RELAY-UPDATE] 🌱 Migration v1.10.0 : section [security_surface] ajoutée à $RULES_CONF (ancrage sécu sélectif — SEC-2, Couche 2)"
+  echo "[RELAY-UPDATE]    (marqueurs de surface sensible → relay-check §9b signale d'ancrer SECURITY_RULES.md ; adaptez/élaguez)."
+fi
+if [ "$SEEDED_SECRULES" -eq 1 ]; then
+  echo "[RELAY-UPDATE] 🌱 Migration v1.10.0 : $SECRULES déposé (checklist d'ancrage sécu — chargée sélectivement, pas en permanence)"
 fi
 echo "[RELAY-UPDATE] ℹ️  Aucun autre fichier d'instance touché (NEXT_SESSION.md, docs/context/*, KNOWN_ISSUES.md…)."
 echo "[RELAY-UPDATE] ════════════════════════════════════════"
