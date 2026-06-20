@@ -64,4 +64,10 @@ jobs:
           # SCOPE-1 : le moteur propagé porte le Scope-Creep Alert (§10, mécanise la règle 70%).
           grep -q 'Scope-Creep Alert' docs/scripts/relay-check.sh \
             || { echo "::error::relay-check.sh propagé ne porte pas §10 Scope-Creep Alert (SCOPE-1)"; exit 1; }
-          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) OK"
+          # DECISION-TRIGGER : le moteur propagé porte le Decision Trigger (§11, trace des décisions archi),
+          # et la section [decision_surface] doit être présente dans rules.conf (marqueurs structurels).
+          grep -q 'Decision Trigger' docs/scripts/relay-check.sh \
+            || { echo "::error::relay-check.sh propagé ne porte pas §11 Decision Trigger (DECISION-TRIGGER)"; exit 1; }
+          grep -qE '^\[decision_surface\]' docs/.relay/rules.conf \
+            || { echo "::error::section [decision_surface] absente de rules.conf (DECISION-TRIGGER)"; exit 1; }
+          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) OK"

@@ -60,11 +60,10 @@ Le contexte LLM est fini. On en réserve 30 % pour la clôture documentaire prop
 3. Ancrage métier (§4) pour les tâches à logique métier.
 4. **Estimer** : S = ~30 min (0.5 pt) · M = ~1 h (1 pt) · L = ~2 h+ (2 pts). Additionner les tâches
    `owner=session status=pending`. **Viser ≤ 2-3 pts** → annoncer un `BUDGET SESSION` explicite.
-   > **Mécanisé (Scope-Creep Alert, `relay-check.sh §10`, v1.12.0)** : `relay-check` somme l'effort des
-   > `TASK[]` **retenables** (`pending` + `owner=session` + `depends=[]`, non bloquées) et émet **un
-   > avertissement signal-only** si la somme dépasse le budget 70% (défaut **3.5 pts**, surcharge
-   > `RELAY_SCOPE_BUDGET`). Heuristique → **guide**, n'altère pas l'exit code ; l'arbitrage de périmètre
-   > reste humain. Un backlog majoritairement **bloqué** (`depends=[X]`) ne déclenche pas (≠ creep).
+   > **Mécanisé** (Scope-Creep Alert, `relay-check.sh §10`, v1.12.0) : `relay-check` somme l'effort des
+   > `TASK[]` **retenables** (`pending`+`owner=session`+`depends=[]`) et émet un WARNING signal-only si le
+   > total dépasse le budget (défaut **3.5 pts**, surcharge `RELAY_SCOPE_BUDGET`). Un backlog **bloqué**
+   > ne déclenche pas (≠ creep). Détail → `CHANGELOG [1.12.0]`.
 5. **Exposer le plan → attendre « go » explicite avant de coder.**
 6. Coder dans l'ordre strict des priorités.
 7. Sauvegarder `NEXT_SESSION.md` après **chaque** tâche terminée.
@@ -115,6 +114,19 @@ SQL, upload, désérialisation). `relay-check.sh` (§9b) émet alors **un averti
   `Patterns appris` de `SECURITY_RULES.md`, pour que la session suivante ne le réintroduise pas.
   `relay-check.sh` (§9c) le rappelle par un WARNING signal-only si le fix sécu atterrit sans pattern
   enregistré ; le déclencheur est déterministe, la puce reste **curatée** (jamais auto-écrite).
+
+### 4c. Trace des décisions architecturales (rôle « Architecte connaissance »)
+
+Une **décision archi** (nouvelle dépendance, nouveau projet, nouvelle interface/abstraction, câblage DI)
+est souvent prise **implicitement** dans un commit, sans être tracée → la connaissance se perd (*pourquoi*
+ce choix, *quelles alternatives rejetées*, *sous quelle condition réviser*). Même famille de trigger que
+§4b : un **grep déterministe** (`[decision_surface]` de `rules.conf`) détecte un changement structurel dans
+le diff stagé ; si **aucune** entrée `## DEC-` n'a été ajoutée à `docs/context/DECISIONS.md` dans le même
+commit, `relay-check.sh` (§11) émet **un WARNING signal-only** « trace cette décision ».
+
+- **Signal-only, calibration étroite** : l'architecture est un jugement → le déterministe **rappelle**,
+  l'humain **décide** et **rédige** la décision (jamais auto-écrite). Les marqueurs excluent la routine
+  (migration, test, refacto) pour éviter le bruit. **Token-négatif** (grep, miroir §9b/§9c).
 
 ---
 

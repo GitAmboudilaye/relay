@@ -383,6 +383,34 @@ if [ ! -f "$SECRULES" ] && [ -f "$SECRULES_TEMPLATE" ]; then
   SEEDED_SECRULES=1
 fi
 
+# ── 2g. Migration Decision Trigger (≥ v1.13.0) — trace des décisions archi (Architecte connaissance) ─
+# Depuis v1.13.0, relay-check (§11) lit une section [decision_surface] : des MARQUEURS de changement
+# STRUCTUREL (nouvelle dépendance/projet/interface) qui, touchés dans le diff SANS qu'une entrée
+# « ## DEC- » soit ajoutée à docs/context/DECISIONS.md, déclenchent un avertissement « trace cette
+# décision ». Sans ce seeding, le trigger ne toucherait que les NOUVEAUX projets (angle mort SEC-1b).
+# Idempotent : ne touche jamais une section déjà présente (instance). DECISIONS.md est déjà seedé par
+# relay-init (template) — on ne le redépose pas ici.
+SEEDED_DECISION=0
+if [ -f "$RULES_CONF" ] && ! grep -qE '^\[decision_surface\]' "$RULES_CONF" 2>/dev/null; then
+  cat >> "$RULES_CONF" <<'DECCONF'
+
+# ── Decision Trigger (seedé par relay-update v1.13.0) ───────────────────────
+# Marqueurs de changement STRUCTUREL (≠ routine). Touchés dans le diff stagé SANS entrée
+# « ## DEC- » ajoutée à docs/context/DECISIONS.md → relay-check (§11) rappelle de tracer.
+# Sévérité = WARNING signal-only. Calibration ÉTROITE : structurels forts SEULEMENT
+# (pas migration/test/refacto). msg= = étiquette de catégorie. Adaptez/élaguez.
+[decision_surface]
+interface\s+[A-Z][A-Za-z0-9_]*                          | msg=nouvelle interface (contrat / abstraction)
+<PackageReference|"dependencies"|"devDependencies"      | msg=nouvelle dépendance
+<Project\s+Sdk=                                         | msg=nouveau projet (.csproj)
+# Per-stack (décommenter) :
+# builder\.Services\.Add(Scoped|Singleton|Transient)    | msg=câblage DI .NET (Program.cs/Startup)
+# @Bean\b|@Configuration\b                               | msg=câblage DI Java/Spring
+# createContext\(|@Module\b|@Injectable\b                | msg=nouveau provider/module (TS)
+DECCONF
+  SEEDED_DECISION=1
+fi
+
 # ── 3. Mettre à jour docs/.relay-version (conserve PROJECT/CANONICAL_URL d'instance) ─
 {
   echo "$NEW_VERSION"
@@ -423,6 +451,10 @@ if [ "$SEEDED_SURFACE" -eq 1 ]; then
 fi
 if [ "$SEEDED_SECRULES" -eq 1 ]; then
   echo "[RELAY-UPDATE] 🌱 Migration v1.10.0 : $SECRULES déposé (checklist d'ancrage sécu — chargée sélectivement, pas en permanence)"
+fi
+if [ "$SEEDED_DECISION" -eq 1 ]; then
+  echo "[RELAY-UPDATE] 🌱 Migration v1.13.0 : section [decision_surface] ajoutée à $RULES_CONF (trace des décisions archi — Architecte connaissance, §11)"
+  echo "[RELAY-UPDATE]    (marqueurs structurels → relay-check §11 rappelle de tracer ## DEC- dans DECISIONS.md ; calibration étroite, adaptez/élaguez)."
 fi
 echo "[RELAY-UPDATE] ℹ️  Aucun autre fichier d'instance touché (NEXT_SESSION.md, docs/context/*, KNOWN_ISSUES.md…)."
 echo "[RELAY-UPDATE] ════════════════════════════════════════"
