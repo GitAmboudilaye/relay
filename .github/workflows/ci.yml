@@ -76,4 +76,10 @@ jobs:
             || { echo "::error::relay-check.sh propagé ne porte pas §12 Regression Pattern Memory (QUAL-1)"; exit 1; }
           grep -qE '^\[regression_warn\]' docs/.relay/rules.conf \
             || { echo "::error::section [regression_warn] absente de rules.conf (QUAL-1)"; exit 1; }
-          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) OK"
+          # RELAY-FORECAST : le moteur propagé porte l'outil de projection de fin de backlog (pair de relay-stats),
+          # et il doit être informatif pur (exit 0 toujours — jamais un gate).
+          [ -x docs/scripts/relay-forecast.sh ] \
+            || { echo "::error::docs/scripts/relay-forecast.sh absent/non exécutable après relay-init (RELAY-FORECAST)"; exit 1; }
+          ./docs/scripts/relay-forecast.sh --json > /dev/null \
+            || { echo "::error::relay-forecast.sh n'est pas exit-0 (doit être informatif pur, jamais un gate)"; exit 1; }
+          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) + forecast (RELAY-FORECAST) OK"
