@@ -11,6 +11,28 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.12.0] — 2026-06-19
+
+### Added
+- **Scope-Creep Alert** — rôle « Chef de projet » (`relay-check.sh §10`, `SCOPE-1`). **Mécanise** la
+  règle des 70% qui n'existait jusqu'ici qu'en **prose** (`RELAY_PROTOCOL.md §2 étape 4`) : le LLM est la
+  couche faible (il s'auto-déclare « ça tient »). `relay-check.sh` somme désormais l'effort des `TASK[]`
+  **retenables** cette session — `status=pending` **+** `owner=session` **+** `depends=[]` (non bloquées) —
+  au barème protocole **S=0.5 / M=1 / L=2**. Si la somme dépasse le **budget 70%** (défaut **3.5 pts**,
+  surchargeable via `RELAY_SCOPE_BUDGET`) → **un avertissement signal-only** « scope-creep : retiens un
+  sous-ensemble, reporte le reste ».
+- **Signal-only** : n'altère **jamais** l'exit code (heuristique → guide, cohérent SEC-2/SEC-4 ; l'arbitrage
+  de périmètre reste humain). **Token-négatif** (réutilise le format `TASK[]` déjà parsé, 0 nouveau
+  vocabulaire d'instance). Ne compte **que** les tâches **non bloquées** (`depends=[]`) → un gros backlog
+  majoritairement bloqué **ne déclenche pas** (≠ creep). Aucune migration `relay-update` (`relay-check.sh`
+  se propage seul par la boucle de copie).
+- `RELAY_PROTOCOL.md §2` — étape 4 formalise le déclencheur mécanisé.
+
+### Notes
+- Vérifié : `shellcheck -S error` CLEAN ; **10/10 PASS** (smoke-test jetable — sous-budget ✅, sur-budget ⚠️,
+  backlog bloqué ≠ creep, seuil configurable, exclusion bloquées/owner=user/status=done, budget invalide →
+  repli 3.5, frontière exacte 3.5 ≤ / 4.0 >). Log : `docs/session_logs/2026-06-19_SCOPE-1-SCOPE-CREEP-ALERT.md`.
+
 ## [1.11.0] — 2026-06-19
 
 ### Added

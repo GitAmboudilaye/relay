@@ -60,6 +60,11 @@ Le contexte LLM est fini. On en réserve 30 % pour la clôture documentaire prop
 3. Ancrage métier (§4) pour les tâches à logique métier.
 4. **Estimer** : S = ~30 min (0.5 pt) · M = ~1 h (1 pt) · L = ~2 h+ (2 pts). Additionner les tâches
    `owner=session status=pending`. **Viser ≤ 2-3 pts** → annoncer un `BUDGET SESSION` explicite.
+   > **Mécanisé (Scope-Creep Alert, `relay-check.sh §10`, v1.12.0)** : `relay-check` somme l'effort des
+   > `TASK[]` **retenables** (`pending` + `owner=session` + `depends=[]`, non bloquées) et émet **un
+   > avertissement signal-only** si la somme dépasse le budget 70% (défaut **3.5 pts**, surcharge
+   > `RELAY_SCOPE_BUDGET`). Heuristique → **guide**, n'altère pas l'exit code ; l'arbitrage de périmètre
+   > reste humain. Un backlog majoritairement **bloqué** (`depends=[X]`) ne déclenche pas (≠ creep).
 5. **Exposer le plan → attendre « go » explicite avant de coder.**
 6. Coder dans l'ordre strict des priorités.
 7. Sauvegarder `NEXT_SESSION.md` après **chaque** tâche terminée.

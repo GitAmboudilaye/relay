@@ -61,4 +61,7 @@ jobs:
           # SEC-4 : le moteur propagé porte le Security Pattern Memory (§9c, auto-feed SECURITY_RULES.md).
           grep -q 'Security Pattern Memory' docs/scripts/relay-check.sh \
             || { echo "::error::relay-check.sh propagé ne porte pas §9c Security Pattern Memory (SEC-4)"; exit 1; }
-          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) OK"
+          # SCOPE-1 : le moteur propagé porte le Scope-Creep Alert (§10, mécanise la règle 70%).
+          grep -q 'Scope-Creep Alert' docs/scripts/relay-check.sh \
+            || { echo "::error::relay-check.sh propagé ne porte pas §10 Scope-Creep Alert (SCOPE-1)"; exit 1; }
+          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) OK"
