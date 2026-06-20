@@ -11,6 +11,32 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.13.0] — 2026-06-19
+
+### Added
+- **Decision Trigger** — rôle « Architecte connaissance » (`relay-check.sh §11`, `DECISION-TRIGGER`).
+  Une **décision architecturale** (nouvelle dépendance, nouveau projet, nouvelle interface Domain…) est
+  souvent prise **implicitement** dans un commit, **sans être tracée** dans `docs/context/DECISIONS.md` →
+  la connaissance se perd (pourquoi ce choix ? quelles alternatives rejetées ? sous quelle condition
+  réviser ?). `relay-check.sh` lit désormais une section `[decision_surface]` de `rules.conf` (**MARQUEURS
+  structurels**, moteur vierge — vocabulaire en instance). Si le **diff stagé** en touche un **ET** qu'aucune
+  entrée `## DEC-` n'a été ajoutée à `DECISIONS.md` dans le même commit → **un avertissement signal-only**
+  « trace cette décision (choix / alternatives rejetées / condition de révision) ».
+- **Signal-only** : n'altère **jamais** l'exit code — l'architecture est un jugement, le LLM est la couche
+  faible : le déterministe **rappelle**, l'humain **décide** (pas d'auto-classification bloquante, pas
+  d'auto-rédaction de la décision). **Token-négatif** (grep, réutilise `parse_security_section` — miroir exact
+  de la famille `§9b`/`§9c`). **Calibration ÉTROITE** (structurels forts seulement, **exclut** migration EF /
+  test / refacto local) → 0 faux positif sur un diff réaliste.
+- **Migration `relay-update §2g`** (v1.13.0) : seede la section `[decision_surface]` dans les `rules.conf`
+  **existants** (sinon le trigger ne toucherait que les nouveaux projets — angle mort SEC-1b). Idempotent.
+- `RELAY_PROTOCOL.md` — 1 section formalise le déclencheur (anti-inflation : compensée par la fusion de la
+  note « budget session » dans la référence `§10` Scope-Creep).
+
+### Forks tranchés (AskUserQuestion, ouverture de session)
+- **Signal** = marqueurs `[decision_surface]` (déterministe, offline, cohérent SEC-2 — pas le message de commit).
+- **Trace attendue** = entrée `## DEC-` dans `DECISIONS.md` (miroir « puce de prose » SEC-4).
+- **Sévérité** = WARNING signal-only. **Calibration** = étroite (structurels forts seulement).
+
 ## [1.12.0] — 2026-06-19
 
 ### Added

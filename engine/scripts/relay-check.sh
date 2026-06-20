@@ -3,6 +3,8 @@
 # + Security Shield (piloté par rules.conf, sections [security_forbidden] BLOQUANT / [security_warn] — v1.8.0)
 # + Security Surface Trigger (ancrage sécu sélectif — section [security_surface], WARNING signal-only — v1.10.0)
 # + Security Pattern Memory (auto-feed SECURITY_RULES.md : fix sécu KNOWN_ISSUES ✅ RÉSOLU sans pattern appris — v1.11.0)
+# + Scope-Creep Alert (mécanise la règle 70% : somme effort des TASK[] retenables > budget → WARNING — v1.12.0)
+# + Decision Trigger (trace décision archi : marqueur [decision_surface] touché sans entrée ## DEC- ajoutée — WARNING signal-only — v1.13.0)
 # + Porte de reçu (v1.2.0) : `[verified-run:<hash>]` exige un reçu relay-run.sh existant (sinon ERREUR)
 # + Skew check (signal-only) : alerte si moteur d'instance < canonique localisable
 # + Design System Shield (piloté par rules.conf, sections [design_warn_*] — v1.4.0)
@@ -866,6 +868,58 @@ if awk "BEGIN { exit !($SCOPE_SUM > $SCOPE_BUDGET) }" 2>/dev/null; then
   WARNINGS=$((WARNINGS + 1))
 else
   $SCORE_ONLY || echo "[RELAY] ✅ Scope-Creep Alert : $SCOPE_SUM pts retenables ≤ budget 70% ($SCOPE_BUDGET pts)"
+fi
+
+# ── 11. Decision Trigger — trace des décisions architecturales (Architecte connaissance, v1.13.0) ──
+# Une décision archi (dépendance, projet, interface Domain, câblage DI…) est souvent prise
+# IMPLICITEMENT dans un commit, sans être tracée dans docs/context/DECISIONS.md → la connaissance
+# se perd (pourquoi ce choix ? quelles alternatives rejetées ? sous quelle condition réviser ?).
+# Miroir EXACT de la famille §9b (scan de surface) + §9c (événement détecté SANS contre-trace → rappel) :
+# réutilise parse_security_section sur une section [decision_surface] (MARQUEURS structurels, moteur
+# vierge — vocabulaire en instance). Si le diff stagé en touche un ET qu'aucune entrée « ## DEC- » n'a
+# été ajoutée à DECISIONS.md dans le même commit stagé → UN avertissement « trace cette décision ».
+# Sévérité = WARNING signal-only (n'altère JAMAIS l'exit) : l'architecture est un jugement, le LLM est
+# la couche faible — le déterministe RAPPELLE, l'humain DÉCIDE (on ne le fait pas auto-classer « ceci est
+# une décision » de façon bloquante). Token-négatif (grep, 0 token LLM). On NE remplit JAMAIS la décision.
+DEC_STAGED=$(git diff --cached --name-only 2>/dev/null | grep -E '\.(cs|dart|py|ts|tsx|js|jsx|go|rs|java|kt|rb|php|json|ya?ml|xml|toml|gradle|csproj|sln|fsproj|vbproj)$' | grep -vE 'docs/\.relay/rules\.conf' || true)
+if [ -n "$DEC_STAGED" ]; then
+  parse_security_section "decision_surface"
+  $SCORE_ONLY || echo ""
+  $SCORE_ONLY || echo "── Decision Trigger ──"
+  if [ "${#SEC_PAT[@]}" -eq 0 ]; then
+    $SCORE_ONLY || echo "[RELAY] ⚠️  Decision Trigger inactif : section [decision_surface] absente/vide dans $RULES_CONF"
+    WARNINGS=$((WARNINGS + 1))
+  else
+    DEC_HITS=""
+    for i in "${!SEC_PAT[@]}"; do
+      pattern="${SEC_PAT[$i]}"; cat_label="${SEC_MSG[$i]}"; excl="${SEC_EXCL[$i]}"; exclpath="${SEC_EXCLPATH[$i]}"
+      while IFS= read -r f; do
+        [ ! -f "$f" ] && continue
+        [ -n "$exclpath" ] && [[ "$f" == *"$exclpath"* ]] && continue
+        added=$(git diff --cached -- "$f" 2>/dev/null | grep "^+" | grep -vE "^\+\+\+" | grep -E -e "$pattern" 2>/dev/null || true)
+        if [ -n "$excl" ] && [ -n "$added" ]; then
+          added=$(echo "$added" | grep -vE -e "$excl" 2>/dev/null || true)
+        fi
+        [ -n "$added" ] && DEC_HITS="$DEC_HITS${cat_label:-changement structurel}"$'\n'
+      done <<< "$DEC_STAGED"
+    done
+    DEC_CATS=$(printf '%s' "$DEC_HITS" | grep -v '^$' | sort -u | paste -sd', ' - 2>/dev/null || true)
+    if [ -n "$DEC_CATS" ]; then
+      # Une entrée « ## DEC- » a-t-elle été ajoutée à DECISIONS.md dans le même commit stagé ?
+      DEC_ENTRY_ADDED=$(git diff --cached -- "docs/context/DECISIONS.md" 2>/dev/null \
+        | grep -E "^\+" | grep -vE "^\+\+\+" | grep -E "^\+##[[:space:]]*DEC-" || true)
+      if [ -z "$DEC_ENTRY_ADDED" ]; then
+        $SCORE_ONLY || echo "[RELAY] ⚠️  Changement structurel détecté ($DEC_CATS) sans décision tracée"
+        $SCORE_ONLY || echo "[RELAY]    → ajoute une entrée ## DEC-XXX dans docs/context/DECISIONS.md (choix / alternatives rejetées / condition de révision)"
+        $SCORE_ONLY || echo "[RELAY]    (signal-only — n'altère pas l'exit ; heuristique, marqueurs [decision_surface] — l'humain décide)"
+        WARNINGS=$((WARNINGS + 1))
+      else
+        $SCORE_ONLY || echo "[RELAY] ✅ Decision Trigger : changement structurel + décision tracée (## DEC-) dans DECISIONS.md"
+      fi
+    else
+      $SCORE_ONLY || echo "[RELAY] ✅ Decision Trigger : aucun changement structurel dans le diff stagé (${#SEC_PAT[@]} marqueur(s) actif(s))"
+    fi
+  fi
 fi
 
 # ── Gating sécurité du LABEL (TASK[RELAY-SCORE-HONEST]) ──────────────────────
