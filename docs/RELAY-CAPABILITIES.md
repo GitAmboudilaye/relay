@@ -1,6 +1,6 @@
 # RELAY — État des capacités v1.x + mise à l'épreuve des rôles
 
-> **Référence non propagée** (comme `RELAY-EVALUATION-v1.7.md`, qu'elle **remplace**).
+> **Référence non propagée** (remplace l'ancienne évaluation v1.7, retirée du dépôt public).
 > But : cartographier honnêtement **les 5 rôles que RELAY prétend jouer** au canonique **v1.15.0**,
 > et **distinguer ce qui est prouvé mécaniquement de ce qui reste à éprouver en conditions réelles**
 > (`docs/VISION.md §346`).

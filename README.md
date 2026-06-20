@@ -4,9 +4,13 @@
 > **sans mémoire partagée** — de travailler sur un même projet brownfield comme une équipe stable :
 > reprendre l'état réel, ne rien casser, ne pas réinventer, laisser le projet repartable en < 10 min.
 
-État : **v1.7.0** · éprouvé sur **2 projets** (AgriConnect, où RELAY est né, et Tempow/DeepManagment)
+État : **v1.15.0** · **5 rôles mécanisés** (cybersécurité · chef de projet · architecte connaissance ·
+auditeur qualité · scrum master — voir [Les 5 rôles](#les-5-rôles-mécanisés-garde-fous-exécutables)) ·
+éprouvé en continu sur **2 projets** du même auteur (AgriConnect, où RELAY est né, et Tempow/DeepManagment)
 \+ **agnosticité de stack prouvée par exécution** (sandbox Python) · moteur portable, **pur** (zéro donnée
-projet en dur) et **auto-distribué** (Update Advisor avec consentement). Lis **[Forces & Limites](#forces--limites-lecture-honnête)** avant de te faire une idée.
+projet en dur) et **auto-distribué** (Update Advisor avec consentement).
+**Lucidité** : les 5 rôles sont **prouvés mécaniquement** (smoke-tests déterministes, sandbox) — **pas encore
+éprouvés en conditions réelles** sur un projet tiers. Lis **[Forces & Limites](#forces--limites-lecture-honnête)** avant de te faire une idée.
 
 ---
 
@@ -38,6 +42,26 @@ un **protocole d'ouverture/clôture** + des **garde-fous exécutables** (`relay-
 - **Garde-fous externalisés à ta stack** : patterns de régression et règles de design-system vivent dans
   `docs/.relay/rules.conf` (instance) — le moteur n'embarque **aucune** donnée projet, donc une mise à
   jour ne peut jamais écraser ton état.
+
+## Les 5 rôles mécanisés (garde-fous exécutables)
+
+> Depuis v1.8, RELAY transforme cinq « rôles » d'équipe en **garde-fous déterministes** (`grep`, 0 token LLM).
+> Principe constant : **le LLM est la couche faible** → le déterministe *rappelle/mesure/bloque*, l'humain
+> *décide*. Détail par version → [`CHANGELOG.md`](CHANGELOG.md). **Lucidité** : ce sont des gates commit/CI,
+> **pas** un IDS/WAF runtime ni un substitut aux tests — et ils sont **prouvés en sandbox, pas encore éprouvés
+> sur un projet tiers**.
+
+| Rôle | Ce qu'il fait | Mécanisme | Depuis |
+|---|---|---|---|
+| **Spécialiste cybersécurité** | Bloque les patterns dangereux (clé privée, secret en clair, IDOR `?id=`, hash faible) ; ancre une checklist sécu **seulement** quand une surface sensible est touchée ; mémorise le pattern après un fix | `relay-check §9/§9b/§9c` (`rules.conf` `[security_*]`) + CI `gitleaks` (`relay-ci.yml`) | v1.8→v1.11 (4 couches) |
+| **Chef de projet** | Mécanise la règle des 70% : somme l'effort des tâches retenables (S/M/L), alerte si le périmètre dépasse le budget | `relay-check §10` (Scope-Creep Alert) | v1.12 |
+| **Architecte connaissance** | Rappelle de tracer une décision archi (dépendance/projet/interface) dans `DECISIONS.md` quand le diff en touche une | `relay-check §11` (Decision Trigger) | v1.13 |
+| **Auditeur qualité** | Après un bug `✅ RÉSOLU`, rappelle d'enregistrer le pattern de non-régression pour qu'il ne revienne pas | `relay-check §12` (`rules.conf` `[regression_warn]`) | v1.14 |
+| **Scrum Master** | Projette « à ce rythme, le backlog se vide dans ~X sessions » + alerte de dérive (scope-creep tendanciel) | `relay-forecast.sh` (informatif, hors gate) | v1.15 |
+
+> Tous sont **token-négatifs** (un `grep` fait le travail que le LLM ferait en lisant) et **signal-only** sauf
+> le gate sécu Couche 1 (qui **bloque**). Les patterns/marqueurs vivent dans `rules.conf` (instance) → adaptables
+> à ta stack, jamais écrasés par une mise à jour.
 
 ## Démarrage rapide
 
@@ -152,8 +176,14 @@ relay/
   + la porte de reçu apportent une preuve mécanique sur `[verified-run]` ; l'auto-déclenchement par hooks
   reste hors core — voir backlog T1, volontairement non livré car spécifique à Claude Code, donc en tension
   avec l'agnosticité revendiquée.)*
-- ⚪ **Jeune (v1.7), bash + Markdown, français-centré.** Le modèle de propagation a mûri (Update Advisor +
-  self-update + CHANGELOG) mais reste récent ; angles connus dans le backlog. i18n absente.
+- 🟠 **Les 5 rôles (v1.8→v1.15) sont prouvés *mécaniquement*, pas *en conditions réelles*.** Chacun passe
+  un smoke-test déterministe (sandbox), mais aucun n'a encore tourné sur un **projet tiers multi-sessions** :
+  un déclencheur peut être trop étroit (faux négatif) ou trop large (faux positif) sur un vrai diff. La
+  généralisation reste une **hypothèse outillée** — la mise à l'épreuve terrain démarre sur les projets de
+  l'auteur (détail → [`docs/RELAY-CAPABILITIES.md`](docs/RELAY-CAPABILITIES.md)).
+- ⚪ **Jeune (v1.15), bash + Markdown, français-centré.** Le modèle de propagation a mûri (Update Advisor +
+  self-update + CHANGELOG + migrations `rules.conf` idempotentes) mais reste récent ; angles connus dans le
+  backlog. i18n absente.
 
 ## Contribuer
 
@@ -170,7 +200,7 @@ mention de copyright, fourni « tel quel » sans garantie.
 ## `docs/.relay-version` (manifeste d'instance)
 
 ```
-1.7.0
+1.15.0
 PROJECT=MonProjet
 CANONICAL_URL=https://github.com/GitAmboudilaye/relay.git
 INSTALLED=2026-06-12
