@@ -75,6 +75,7 @@ jour lui-même** d'abord (bootstrapping), puis copie le **MOTEUR seul** — **au
 ./docs/scripts/relay-brief.sh     # Senior Brief — 10 lignes, l'état en 30 s
 ./docs/scripts/relay-check.sh     # Health Score + garde-fous (validation NEXT_SESSION.md)
 ./docs/scripts/relay-stats.sh     # vélocité, bugs vs features (depuis git)
+./docs/scripts/relay-forecast.sh  # projette "à ce rythme, le backlog se vide dans X sessions" + alerte de dérive
 ./docs/scripts/relay-split.sh     # fractionne NEXT_SESSION.md s'il dépasse 150 lignes
 ```
 
@@ -85,7 +86,7 @@ Le protocole complet (MRS, règle des 70 %, format des tâches, clôture) → `d
 ```
 relay/
 ├── engine/
-│   ├── scripts/   # relay-check, relay-brief, relay-stats, stale-detector, relay-split, audit
+│   ├── scripts/   # relay-check, relay-brief, relay-stats, relay-forecast, stale-detector, relay-split, audit
 │   └── rules/     # RELAY_PROTOCOL.md  (§0-§7 portables, §8 = pointeur statique)
 ├── templates/     # graines des fichiers d'instance ({{PLACEHOLDERS}})
 ├── bin/           # relay-init.sh (bootstrap) · relay-update.sh (propagation)

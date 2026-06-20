@@ -11,6 +11,38 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.15.0] — 2026-06-20
+
+### Added
+- **Backlog Forecast** — rôle « Scrum Master / Chef de projet » (`engine/scripts/relay-forecast.sh`,
+  `RELAY-FORECAST`). Le Chef de projet savait **où on en est** (backlog `TASK[]`, effort S/M/L,
+  règle 70% mécanisée par SCOPE-1 §10) mais pas **quand on arrive** : aucune projection « à ce
+  rythme, le backlog retenable se vide dans X sessions » (`VISION.md §115`). C'est le **prolongement
+  temporel** de SCOPE-1 (qui mesure la session COURANTE ; le forecast projette le RYTHME). Nouvel
+  outil **on-demand séparé**, pair de `relay-stats.sh` (jamais dans le gate pre-commit) :
+  - **Points restants** = somme effort des `TASK[]` **retenables** (pending + owner=session +
+    depends=[]) au **barème SCOPE-1 S=0.5/M=1/L=2** — *même filtre, même unité* (zéro divergence
+    avec la règle 70%).
+  - **Vélocité** = points **done** récents ÷ **nb de sessions** récentes (points/session, **pas**
+    commit) — fenêtre `--window=N` (défaut 5) ; sessions = `docs/session_logs/*.md` (canonique) ou,
+    à défaut, dates distinctes des tâches done (instance).
+  - **Projection** = `ceil(restants / vélocité)` en **fourchette** (meilleur → plus faible débit
+    observé), jamais un faux point précis.
+  - **Honnêteté de calibration** : < 2 sessions ou 0 tâche done → « historique insuffisant » (jamais
+    un chiffre inventé) ; backlog retenable vide → « 0 session ».
+  - **Alerte de dérive** (scope-creep *tendanciel*, `VISION.md §116`, distincte de SCOPE-1 qui mesure
+    la session courante) : sur la fenêtre, points **ajoutés** au backlog vs points **fermés**
+    (via `git diff`, offline) → backlog qui grossit plus vite qu'il ne se vide.
+  - **Informatif pur** : `exit 0` TOUJOURS — ne bloque ni n'alourdit aucun commit (n'est PAS un gate),
+    mode `--json` réutilisable. Surcharges : `RELAY_FORECAST_WINDOW`, `RELAY_FORECAST_DRIFT_THRESHOLD`.
+  - **0 migration** `rules.conf` : le nouveau script tombe dans le glob `engine/scripts/*.sh` propagé
+    par `relay-init`/`relay-update` (aucune section d'instance à seeder). `ci.yml` : 1 assert
+    (script propagé + exécutable + exit 0). Smoke-test jetable déterministe **21/21 PASS** (projection
+    exacte, insuffisant, vide, dérive↑/↓, exit 0). `shellcheck -S error` CLEAN.
+  - **Décisions user (AskUserQuestion)** : (3.2) script séparé `relay-forecast.sh` ; (3.1) points done
+    ÷ nb sessions (fenêtre récente) ; (3.3) projection **+ alerte de dérive** ; (3.4) informatif pur.
+  - **Priorité 5 (roadmap VISION §12) COMPLÈTE** — dernier item livré.
+
 ## [1.14.0] — 2026-06-19
 
 ### Added
