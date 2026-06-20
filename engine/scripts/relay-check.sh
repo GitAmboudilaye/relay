@@ -835,6 +835,39 @@ if [ -n "$CODE_STAGED" ] && { [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRAN
   WARNINGS=$((WARNINGS + 1))
 fi
 
+# ── 10. Scope-Creep Alert — mécanise la règle 70% du protocole §2 (Chef de projet, v1.12.0) ──
+# La règle des 70% existait en PROSE (§2 étape 4) mais n'était jamais MÉCANISÉE : le LLM est la couche
+# faible (il s'auto-déclare « ça tient »). Ici relay-check somme l'effort des TASK[] RETENABLES cette
+# session — pending + owner=session + depends=[] (NON bloquées) — au barème protocole S=0.5/M=1/L=2.
+# Si la somme dépasse le budget 70% (défaut 3.5 pts, surchargeable RELAY_SCOPE_BUDGET) → UN avertissement
+# signal-only « scope-creep : retenir un sous-ensemble, reporter le reste ». N'altère JAMAIS l'exit code
+# (heuristique → guide, cohérent SEC-2/SEC-4 ; l'arbitrage de périmètre reste humain). Token-négatif
+# (réutilise le format TASK[] déjà parsé l.176-181, 0 nouveau vocabulaire d'instance). On ne compte QUE
+# les tâches non bloquées (depends=[]) → un gros backlog majoritairement bloqué ne déclenche pas (≠ creep).
+SCOPE_BUDGET="${RELAY_SCOPE_BUDGET:-3.5}"
+# Garde : budget non numérique → repli sur le défaut protocole (ne jamais crasher sur un env mal réglé)
+case "$SCOPE_BUDGET" in ''|*[!0-9.]*) SCOPE_BUDGET=3.5 ;; esac
+SCOPE_SUM=$(awk '
+  /TASK\[/ && /status=pending/ && /owner=session/ && /depends=\[\]/ {
+    if      ($0 ~ /effort=S/) sum += 0.5
+    else if ($0 ~ /effort=M/) sum += 1
+    else if ($0 ~ /effort=L/) sum += 2
+  }
+  END { printf "%.1f", sum + 0 }
+' "$FILE" 2>/dev/null || echo 0)
+SCOPE_SUM=${SCOPE_SUM:-0.0}
+$SCORE_ONLY || echo ""
+$SCORE_ONLY || echo "── Scope-Creep Alert ──"
+# Comparaison flottante via awk (le test bash [ ] ne compare pas les décimaux)
+if awk "BEGIN { exit !($SCOPE_SUM > $SCOPE_BUDGET) }" 2>/dev/null; then
+  $SCORE_ONLY || echo "[RELAY] ⚠️  Scope-creep : $SCOPE_SUM pts retenables (pending · owner=session · depends=[]) > budget 70% ($SCOPE_BUDGET pts)"
+  $SCORE_ONLY || echo "[RELAY]    → retiens un sous-ensemble ≤ $SCOPE_BUDGET pts, reporte le reste (protocole §2) ; barème S=0.5/M=1/L=2"
+  $SCORE_ONLY || echo "[RELAY]    (signal-only — n'altère pas l'exit ; surcharge RELAY_SCOPE_BUDGET)"
+  WARNINGS=$((WARNINGS + 1))
+else
+  $SCORE_ONLY || echo "[RELAY] ✅ Scope-Creep Alert : $SCOPE_SUM pts retenables ≤ budget 70% ($SCOPE_BUDGET pts)"
+fi
+
 # ── Gating sécurité du LABEL (TASK[RELAY-SCORE-HONEST]) ──────────────────────
 # Le LABEL « 🟢 Sain » ne doit pas s'afficher tant qu'un finding P0/P1 reste OUVERT
 # dans KNOWN_ISSUES.md. On gate UNIQUEMENT le label affiché — le score numérique
