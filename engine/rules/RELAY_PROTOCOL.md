@@ -92,7 +92,7 @@ Avant toute implémentation à logique métier, écrire dans le `TASK[]` :
 `relay-check.sh` **bloque** le commit si une tâche `owner=session` débloquée contient des mots-clés
 métier sans bloc `ANCRAGE:`.
 
-### 4b. Ancrage sécu SÉLECTIF (rôle cybersécurité — Couche 2)
+### 4b. Ancrage sécu SÉLECTIF (rôle cybersécurité — Couches 2 & 4)
 
 Le LLM est la couche faible : on ne lui demande **pas** de juger sa propre sécurité en permanence (excès
 de confiance + inflation de tokens). À la place, un **grep déterministe** (`[security_surface]` de
@@ -105,6 +105,11 @@ SQL, upload, désérialisation). `relay-check.sh` (§9b) émet alors **un averti
 - **WARNING, pas bloquant** : la détection de surface est heuristique (faux positifs) → elle guide, ne gate
   pas. Le verdict reste humain. *(Le gate dur, lui, est la Couche 1 `[security_forbidden]` — secrets évidents.)*
 - **Lucidité** : gate commit/CI, **pas** un IDS/WAF runtime ; ne remplace pas un pentest.
+- **Couche 4 — auto-feed (mémoire des patterns)** : après avoir corrigé une faille (un finding sécu de
+  `KNOWN_ISSUES.md` passé `✅ RÉSOLU`), enregistre **un pattern concret appris** dans la section
+  `Patterns appris` de `SECURITY_RULES.md`, pour que la session suivante ne le réintroduise pas.
+  `relay-check.sh` (§9c) le rappelle par un WARNING signal-only si le fix sécu atterrit sans pattern
+  enregistré ; le déclencheur est déterministe, la puce reste **curatée** (jamais auto-écrite).
 
 ---
 

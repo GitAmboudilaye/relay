@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# relay-check.sh v3.7 — Validation structure + contenu + commits + clôture NEXT_SESSION.md
+# relay-check.sh v3.8 — Validation structure + contenu + commits + clôture NEXT_SESSION.md
 # + Security Shield (piloté par rules.conf, sections [security_forbidden] BLOQUANT / [security_warn] — v1.8.0)
 # + Security Surface Trigger (ancrage sécu sélectif — section [security_surface], WARNING signal-only — v1.10.0)
+# + Security Pattern Memory (auto-feed SECURITY_RULES.md : fix sécu KNOWN_ISSUES ✅ RÉSOLU sans pattern appris — v1.11.0)
 # + Porte de reçu (v1.2.0) : `[verified-run:<hash>]` exige un reçu relay-run.sh existant (sinon ERREUR)
 # + Skew check (signal-only) : alerte si moteur d'instance < canonique localisable
 # + Design System Shield (piloté par rules.conf, sections [design_warn_*] — v1.4.0)
@@ -781,6 +782,45 @@ if [ -n "$SEC_STAGED" ]; then
     else
       $SCORE_ONLY || echo "[RELAY] ✅ Security Surface Trigger : aucune surface sensible dans le diff stagé (${#SEC_PAT[@]} marqueur(s) actif(s))"
     fi
+  fi
+fi
+
+# ── 9c. Security Pattern Memory — auto-feed de SECURITY_RULES.md (Couche 4, v1.11.0) ──
+# Miroir du Regression Shield transposé à la sécurité. Quand une CORRECTION de sécurité atterrit
+# (un finding de KNOWN_ISSUES.md passe ✅ RÉSOLU dans le diff stagé ET le diff porte un marqueur
+# [security_surface]) SANS qu'un « pattern appris » soit enregistré dans SECURITY_RULES.md
+# (§Patterns appris) → UN avertissement signal-only invitant à l'enregistrer, pour que la session
+# suivante ne réintroduise pas le bug corrigé.
+# Le LLM est la couche faible : le DÉCLENCHEUR est déterministe (grep, réutilise le vocabulaire
+# d'instance [security_surface] → moteur vierge, comme §9b), la PUCE reste CURATÉE par l'humain
+# (on n'auto-écrit jamais de la sécurité). Token-NEUTRE (1 puce ciblée, soumise à la jauge densité).
+# Sévérité = WARNING signal-only (n'altère JAMAIS l'exit). LUCIDITÉ : gate commit/CI ≠ pentest.
+KI_ADDED=$(git diff --cached -- "docs/rules/KNOWN_ISSUES.md" 2>/dev/null | grep "^+" | grep -vE "^\+\+\+" || true)
+if [ -n "$KI_ADDED" ] && printf '%s\n' "$KI_ADDED" | grep -qE "✅ RÉSOLU" 2>/dev/null; then
+  $SCORE_ONLY || echo ""
+  $SCORE_ONLY || echo "── Security Pattern Memory ──"
+  parse_security_section "security_surface"
+  SEC_FIX_MATCH=""
+  for i in "${!SEC_PAT[@]}"; do
+    if printf '%s\n' "$KI_ADDED" | grep -qE -e "${SEC_PAT[$i]}" 2>/dev/null; then
+      SEC_FIX_MATCH=1; break
+    fi
+  done
+  if [ -n "$SEC_FIX_MATCH" ]; then
+    # Un pattern appris a-t-il été ajouté à SECURITY_RULES.md (puce de prose, PAS une checkbox) ?
+    PATTERN_ADDED=$(git diff --cached -- "docs/rules/SECURITY_RULES.md" 2>/dev/null \
+      | grep -E "^\+" | grep -vE "^\+\+\+" \
+      | grep -E "^\+[[:space:]]*-[[:space:]]+" | grep -vE "^\+[[:space:]]*-[[:space:]]+\[ \]" || true)
+    if [ -z "$PATTERN_ADDED" ]; then
+      $SCORE_ONLY || echo "[RELAY] ⚠️  Fix sécu détecté (finding KNOWN_ISSUES ✅ RÉSOLU) sans pattern appris enregistré"
+      $SCORE_ONLY || echo "[RELAY]    → ajoute un pattern concret dans docs/rules/SECURITY_RULES.md (§Patterns appris, Couche 4) pour que la prochaine session ne le réintroduise pas"
+      $SCORE_ONLY || echo "[RELAY]    (signal-only — n'altère pas l'exit ; soumis à la jauge densité anti-inflation)"
+      WARNINGS=$((WARNINGS + 1))
+    else
+      $SCORE_ONLY || echo "[RELAY] ✅ Security Pattern Memory : fix sécu + pattern appris enregistré dans SECURITY_RULES.md"
+    fi
+  else
+    $SCORE_ONLY || echo "[RELAY] ✅ Security Pattern Memory : finding résolu non-sécu (aucun marqueur [security_surface]) — rien à enregistrer"
   fi
 fi
 
