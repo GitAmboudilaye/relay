@@ -411,6 +411,27 @@ DECCONF
   SEEDED_DECISION=1
 fi
 
+# ── 2h. Migration Regression Pattern Memory (≥ v1.14.0) — tier WARNING [regression_warn] (Auditeur qualité) ─
+# Depuis v1.14.0, relay-check (§12) rappelle d'enregistrer un pattern de non-régression quand un bug de
+# KNOWN_ISSUES.md passe ✅ RÉSOLU ; §7b scanne ces patterns APPRIS en WARNING. Ils vivent dans une section
+# [regression_warn] de rules.conf. Sans ce seeding, le tier ne toucherait que les NOUVEAUX projets (angle
+# mort SEC-1b). Idempotent : ne touche jamais une section déjà présente (fichier d'instance).
+SEEDED_REGRESSION=0
+if [ -f "$RULES_CONF" ] && ! grep -qE '^\[regression_warn\]' "$RULES_CONF" 2>/dev/null; then
+  cat >> "$RULES_CONF" <<'REGRCONF'
+
+# ── Regression Shield — tier WARNING (seedé par relay-update v1.14.0) ────────
+# Patterns APPRIS (sévérité WARNING, ne bloque pas). Auto-alimenté : un bug KNOWN_ISSUES
+# passé ✅ RÉSOLU → relay-check (§12) rappelle d'ajouter ICI un pattern → §7b le scanne en
+# WARNING pour éviter la régression. « Pas de pattern applicable » = réponse légitime.
+# Format identique à [forbidden_patterns] + msg= optionnel : <regex> | msg=<texte> | exclude=<regex>
+[regression_warn]
+# Exemples (décommenter + adapter ; normalement enrichi au fil des corrections) :
+# \.Include\([^)]*\)\.Select   | msg=.Include() après .Select() ignoré silencieusement
+REGRCONF
+  SEEDED_REGRESSION=1
+fi
+
 # ── 3. Mettre à jour docs/.relay-version (conserve PROJECT/CANONICAL_URL d'instance) ─
 {
   echo "$NEW_VERSION"
@@ -455,6 +476,10 @@ fi
 if [ "$SEEDED_DECISION" -eq 1 ]; then
   echo "[RELAY-UPDATE] 🌱 Migration v1.13.0 : section [decision_surface] ajoutée à $RULES_CONF (trace des décisions archi — Architecte connaissance, §11)"
   echo "[RELAY-UPDATE]    (marqueurs structurels → relay-check §11 rappelle de tracer ## DEC- dans DECISIONS.md ; calibration étroite, adaptez/élaguez)."
+fi
+if [ "$SEEDED_REGRESSION" -eq 1 ]; then
+  echo "[RELAY-UPDATE] 🌱 Migration v1.14.0 : section [regression_warn] ajoutée à $RULES_CONF (Regression Shield auto-alimenté — Auditeur qualité, §12)"
+  echo "[RELAY-UPDATE]    (patterns appris scannés en WARNING par §7b → un bug corrigé y dépose son pattern ; enrichi au fil des corrections)."
 fi
 echo "[RELAY-UPDATE] ℹ️  Aucun autre fichier d'instance touché (NEXT_SESSION.md, docs/context/*, KNOWN_ISSUES.md…)."
 echo "[RELAY-UPDATE] ════════════════════════════════════════"

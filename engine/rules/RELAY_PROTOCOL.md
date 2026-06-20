@@ -128,6 +128,17 @@ commit, `relay-check.sh` (§11) émet **un WARNING signal-only** « trace cette 
   l'humain **décide** et **rédige** la décision (jamais auto-écrite). Les marqueurs excluent la routine
   (migration, test, refacto) pour éviter le bruit. **Token-négatif** (grep, miroir §9b/§9c).
 
+### 4d. Mémoire des patterns de régression (rôle « Auditeur qualité »)
+
+Le Regression Shield (`[forbidden_patterns]`, ERREUR) bloque les patterns **déjà déclarés** interdits,
+mais reste **aveugle aux bugs neufs**. Couche d'auto-alimentation : après avoir corrigé un bug (un finding
+**non-sécu** de `KNOWN_ISSUES.md` passé `✅ RÉSOLU`), enregistre **un pattern concret appris** dans la
+section `[regression_warn]` de `rules.conf` (tier **WARNING**, scanné par `relay-check §7b`) pour que la
+session suivante ne le réintroduise pas. `relay-check §12` le rappelle par un WARNING signal-only si le
+fix atterrit sans pattern ; déterministe (grep), puce **curatée** (jamais auto-écrite). « Pas de pattern
+applicable » (bug de logique/timing) est légitime — le trigger invite, ne harcèle pas. *(Partition propre
+avec §9c : les fix **sécu** vont dans `SECURITY_RULES.md §Patterns appris`, pas ici → zéro double-fire.)*
+
 ---
 
 ## 5. Escalade métier (Pilier 9)

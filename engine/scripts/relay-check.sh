@@ -555,6 +555,81 @@ if [ -n "$STAGED_FILES" ]; then
   fi
 fi
 
+# Parse une section sécu → SEC_PAT/SEC_MSG/SEC_EXCL/SEC_EXCLPATH (miroir parse_design_section + exclude contenu).
+# Définie ICI (avant §7b qui l'appelle en premier) — en bash une fonction doit exister avant son appel.
+# Lit $RULES_CONF au call-time (résolu à l'appel, pas à la définition) → sûr même si défini tôt.
+parse_security_section() {
+  local section="$1" line in_section=0 pat rest token
+  SEC_PAT=(); SEC_MSG=(); SEC_EXCL=(); SEC_EXCLPATH=()
+  [ -f "$RULES_CONF" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line#"${line%%[![:space:]]*}"}"                   # ltrim
+    [ -z "$line" ] && continue
+    case "$line" in \#*) continue ;; esac                     # commentaire
+    if [[ "$line" =~ ^\[[a-z_]+\]$ ]]; then                   # en-tête de section
+      [ "$line" = "[$section]" ] && in_section=1 || in_section=0
+      continue
+    fi
+    [ "$in_section" = "1" ] || continue
+    pat="${line%%' | '*}"                                     # regex = avant le 1er « | »
+    local msg="" excl="" exclpath=""
+    if [[ "$line" == *' | '* ]]; then
+      rest="${line#*' | '}"
+      while [ -n "$rest" ]; do                                # champs key=value séparés par « | »
+        if [[ "$rest" == *' | '* ]]; then
+          token="${rest%%' | '*}"; rest="${rest#*' | '}"
+        else
+          token="$rest"; rest=""
+        fi
+        case "$token" in
+          msg=*)          msg="${token#msg=}" ;;
+          exclude=*)      excl="${token#exclude=}" ;;
+          exclude-path=*) exclpath="${token#exclude-path=}" ;;
+        esac
+      done
+    fi
+    pat="${pat%"${pat##*[![:space:]]}"}"                      # rtrim regex
+    [ -z "$pat" ] && continue
+    SEC_PAT+=("$pat"); SEC_MSG+=("$msg"); SEC_EXCL+=("$excl"); SEC_EXCLPATH+=("$exclpath")
+  done < "$RULES_CONF"
+}
+
+# ── 7b. Regression Shield — tier WARNING [regression_warn] (Auditeur qualité, v1.14.0) ──
+# Le tier ERREUR [forbidden_patterns] (§7) BLOQUE les patterns que le projet a explicitement
+# proscrits. Le tier WARNING [regression_warn] accueille les patterns APPRIS — auto-alimentés
+# (rappelés par §12 quand un bug neuf est corrigé) : plus sûr à enrichir car un pattern imparfait
+# ou trop large ne bloque JAMAIS à tort (WARNING signal-only, n'altère pas l'exit). Réutilise
+# parse_security_section (générique par nom de section) + le grep déterministe de §7. Sans ce tier,
+# un pattern appris ne serait jamais re-vérifié → le bug pourrait revenir (problème ciblé par §12).
+if [ -n "$STAGED_FILES" ]; then
+  parse_security_section "regression_warn"
+  if [ "${#SEC_PAT[@]}" -gt 0 ]; then
+    $SCORE_ONLY || echo ""
+    $SCORE_ONLY || echo "── Regression Shield (tier WARNING — patterns appris) ──"
+    REGR_WARN_HITS=0
+    for i in "${!SEC_PAT[@]}"; do
+      pattern="${SEC_PAT[$i]}"; msg="${SEC_MSG[$i]}"; excl="${SEC_EXCL[$i]}"; exclpath="${SEC_EXCLPATH[$i]}"
+      while IFS= read -r staged_file; do
+        [ ! -f "$staged_file" ] && continue
+        [ -n "$exclpath" ] && [[ "$staged_file" == *"$exclpath"* ]] && continue
+        ADDED=$(git diff --cached -- "$staged_file" 2>/dev/null | grep "^+" | grep -vE "^\+\+\+" | grep -E -e "$pattern" 2>/dev/null || true)
+        if [ -n "$excl" ] && [ -n "$ADDED" ]; then
+          ADDED=$(echo "$ADDED" | grep -vE -e "$excl" 2>/dev/null || true)
+        fi
+        MATCHES=$(echo "$ADDED" | grep -cE -e "$pattern" 2>/dev/null || true)
+        [ -z "$ADDED" ] && MATCHES=0
+        if [ "$MATCHES" -gt 0 ]; then
+          $SCORE_ONLY || echo "[RELAY] ⚠️  Regression Shield (appris) : \`$pattern\` réintroduit dans $staged_file — ${msg:-régression : bug déjà corrigé} (+$MATCHES lignes)"
+          WARNINGS=$((WARNINGS + 1)); REGR_WARN_HITS=$((REGR_WARN_HITS + 1))
+        fi
+      done <<< "$STAGED_FILES"
+    done
+    if [ "$REGR_WARN_HITS" -eq 0 ]; then
+      $SCORE_ONLY || echo "[RELAY] ✅ Regression Shield (tier WARNING) : 0 pattern appris réintroduit (${#SEC_PAT[@]} règle(s))"
+    fi
+  fi
+fi
+
 # ── 8. Design System Shield — piloté par docs/.relay/rules.conf (v1.4.0) ──────
 # Les patterns/messages/exclusions du Design System vivent dans rules.conf (instance),
 # sections [design_warn_flutter] (fichiers .dart) et [design_warn_css] (.css/.cshtml).
@@ -654,42 +729,7 @@ fi
 # Zéro donnée projet dans le moteur : le mécanisme est ici, les patterns vivent dans rules.conf.
 # LUCIDITÉ : gate commit/CI, PAS un IDS/WAF runtime — ne remplace pas un pentest.
 
-# Parse une section sécu → SEC_PAT/SEC_MSG/SEC_EXCL/SEC_EXCLPATH (miroir parse_design_section + exclude contenu).
-parse_security_section() {
-  local section="$1" line in_section=0 pat rest token
-  SEC_PAT=(); SEC_MSG=(); SEC_EXCL=(); SEC_EXCLPATH=()
-  [ -f "$RULES_CONF" ] || return 0
-  while IFS= read -r line || [ -n "$line" ]; do
-    line="${line#"${line%%[![:space:]]*}"}"                   # ltrim
-    [ -z "$line" ] && continue
-    case "$line" in \#*) continue ;; esac                     # commentaire
-    if [[ "$line" =~ ^\[[a-z_]+\]$ ]]; then                   # en-tête de section
-      [ "$line" = "[$section]" ] && in_section=1 || in_section=0
-      continue
-    fi
-    [ "$in_section" = "1" ] || continue
-    pat="${line%%' | '*}"                                     # regex = avant le 1er « | »
-    local msg="" excl="" exclpath=""
-    if [[ "$line" == *' | '* ]]; then
-      rest="${line#*' | '}"
-      while [ -n "$rest" ]; do                                # champs key=value séparés par « | »
-        if [[ "$rest" == *' | '* ]]; then
-          token="${rest%%' | '*}"; rest="${rest#*' | '}"
-        else
-          token="$rest"; rest=""
-        fi
-        case "$token" in
-          msg=*)          msg="${token#msg=}" ;;
-          exclude=*)      excl="${token#exclude=}" ;;
-          exclude-path=*) exclpath="${token#exclude-path=}" ;;
-        esac
-      done
-    fi
-    pat="${pat%"${pat##*[![:space:]]}"}"                      # rtrim regex
-    [ -z "$pat" ] && continue
-    SEC_PAT+=("$pat"); SEC_MSG+=("$msg"); SEC_EXCL+=("$excl"); SEC_EXCLPATH+=("$exclpath")
-  done < "$RULES_CONF"
-}
+# (parse_security_section est défini plus haut, avant §7b — première utilisation.)
 
 # Scanne les fichiers stagés contre une section sécu. $1=stagés $2=section $3=severity(error|warn).
 scan_security_section() {
@@ -800,7 +840,7 @@ fi
 KI_ADDED=$(git diff --cached -- "docs/rules/KNOWN_ISSUES.md" 2>/dev/null | grep "^+" | grep -vE "^\+\+\+" || true)
 if [ -n "$KI_ADDED" ] && printf '%s\n' "$KI_ADDED" | grep -qE "✅ RÉSOLU" 2>/dev/null; then
   $SCORE_ONLY || echo ""
-  $SCORE_ONLY || echo "── Security Pattern Memory ──"
+  $SCORE_ONLY || echo "── Pattern Memory (Auditeur qualité — sécu §9c / régression §12) ──"
   parse_security_section "security_surface"
   SEC_FIX_MATCH=""
   for i in "${!SEC_PAT[@]}"; do
@@ -822,7 +862,37 @@ if [ -n "$KI_ADDED" ] && printf '%s\n' "$KI_ADDED" | grep -qE "✅ RÉSOLU" 2>/d
       $SCORE_ONLY || echo "[RELAY] ✅ Security Pattern Memory : fix sécu + pattern appris enregistré dans SECURITY_RULES.md"
     fi
   else
-    $SCORE_ONLY || echo "[RELAY] ✅ Security Pattern Memory : finding résolu non-sécu (aucun marqueur [security_surface]) — rien à enregistrer"
+    # ── 12. Regression Pattern Memory — Regression Shield auto-alimenté (Auditeur qualité, v1.14.0) ──
+    # On est dans la branche NON-SÉCU de §9c (finding ✅ RÉSOLU SANS marqueur [security_surface]) :
+    # la partition sécu/non-sécu est donc propre PAR CONSTRUCTION → zéro double-fire avec §9c (qui a
+    # déjà géré le cas sécu ci-dessus). Miroir du Regression Shield transposé au BUG NEUF : quand un
+    # finding de KNOWN_ISSUES.md passe ✅ RÉSOLU mais qu'AUCUN pattern n'a été ajouté au tier
+    # [regression_warn] de rules.conf dans le même commit stagé → UN avertissement signal-only invitant
+    # à enregistrer un pattern pour que le bug ne revienne pas (§7b le scannera ensuite, en WARNING).
+    # Le LLM est la couche faible : le DÉCLENCHEUR est déterministe (grep), la PUCE reste CURATÉE par
+    # l'humain (on n'auto-écrit jamais le pattern). « Pas de pattern applicable » (bug de logique/timing
+    # non réductible à une regex) est une réponse humaine LÉGITIME → le trigger INVITE, ne harcèle pas.
+    # Sévérité = WARNING signal-only (n'altère JAMAIS l'exit). Token-négatif (grep, 0 token LLM).
+    parse_security_section "regression_warn"
+    REGR_PATTERN_ADDED=""
+    if [ "${#SEC_PAT[@]}" -gt 0 ]; then
+      REGR_RULES_ADDED=$(git diff --cached -- "$RULES_CONF" 2>/dev/null | grep "^+" | grep -vE "^\+\+\+" || true)
+      if [ -n "$REGR_RULES_ADDED" ]; then
+        for i in "${!SEC_PAT[@]}"; do
+          if printf '%s\n' "$REGR_RULES_ADDED" | grep -qF -- "${SEC_PAT[$i]}" 2>/dev/null; then
+            REGR_PATTERN_ADDED=1; break
+          fi
+        done
+      fi
+    fi
+    if [ -z "$REGR_PATTERN_ADDED" ]; then
+      $SCORE_ONLY || echo "[RELAY] ⚠️  Bug corrigé (finding KNOWN_ISSUES ✅ RÉSOLU) sans pattern de non-régression enregistré"
+      $SCORE_ONLY || echo "[RELAY]    → ajoute un pattern dans la section [regression_warn] de $RULES_CONF pour que ce bug ne revienne pas (§7b le scannera en WARNING)"
+      $SCORE_ONLY || echo "[RELAY]    (signal-only — n'altère pas l'exit ; « pas de pattern applicable » [bug logique/timing] = réponse légitime)"
+      WARNINGS=$((WARNINGS + 1))
+    else
+      $SCORE_ONLY || echo "[RELAY] ✅ Regression Pattern Memory : bug corrigé + pattern de non-régression ajouté à [regression_warn]"
+    fi
   fi
 fi
 
