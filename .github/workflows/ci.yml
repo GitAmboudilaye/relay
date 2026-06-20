@@ -70,4 +70,10 @@ jobs:
             || { echo "::error::relay-check.sh propagé ne porte pas §11 Decision Trigger (DECISION-TRIGGER)"; exit 1; }
           grep -qE '^\[decision_surface\]' docs/.relay/rules.conf \
             || { echo "::error::section [decision_surface] absente de rules.conf (DECISION-TRIGGER)"; exit 1; }
-          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) OK"
+          # QUAL-1 : le moteur propagé porte le Regression Pattern Memory (§12, Regression Shield auto-alimenté),
+          # et la section [regression_warn] doit être présente dans rules.conf (tier WARNING des patterns appris).
+          grep -q 'Regression Pattern Memory' docs/scripts/relay-check.sh \
+            || { echo "::error::relay-check.sh propagé ne porte pas §12 Regression Pattern Memory (QUAL-1)"; exit 1; }
+          grep -qE '^\[regression_warn\]' docs/.relay/rules.conf \
+            || { echo "::error::section [regression_warn] absente de rules.conf (QUAL-1)"; exit 1; }
+          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) OK"

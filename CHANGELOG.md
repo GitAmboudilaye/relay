@@ -11,6 +11,27 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.14.0] — 2026-06-19
+
+### Added
+- **Regression Pattern Memory** — rôle « Auditeur qualité » (`relay-check.sh §12`, `QUAL-1`).
+  Le Regression Shield bloquait les patterns **déjà déclarés** interdits mais restait **aveugle aux
+  bugs neufs** : quand une session corrigeait un bug (un finding de `KNOWN_ISSUES.md` passe
+  `✅ RÉSOLU`), **rien** ne rappelait d'enregistrer le pattern correspondant → le même bug pouvait
+  **revenir**. Désormais, dans la **branche non-sécu de §9c** (finding résolu **sans** marqueur
+  `[security_surface]` → partition propre, **zéro double-fire** avec la sécu), si **aucun** pattern
+  n'a été ajouté au nouveau tier `[regression_warn]` de `rules.conf` dans le même commit stagé →
+  **un WARNING signal-only** invite à l'enregistrer. Le **nouveau tier `[regression_warn]`** (§7b) est
+  scanné en **WARNING** (≠ `[forbidden_patterns]` ERREUR) : plus sûr à auto-alimenter — un pattern
+  imparfait ne bloque **jamais** à tort. Le déclencheur est **déterministe** (grep, 0 token LLM), la
+  puce reste **curatée** par l'humain (jamais auto-écrite) ; « pas de pattern applicable » (bug de
+  logique/timing) est une réponse **légitime** → le trigger invite, ne harcèle pas.
+- **Migration `relay-update §2h`** — seede la section `[regression_warn]` dans les `rules.conf`
+  existants (sinon le tier ne toucherait que les nouveaux projets — angle mort SEC-1b). Idempotent.
+- **`ci.yml`** — assert que le moteur propagé porte §12 + que `[regression_warn]` est présent.
+- **Décisions user** (`AskUserQuestion`) : cible = **nouveau tier `[regression_warn]` (WARNING)** ;
+  signal = finding **non-sécu** seulement (partition propre) ; sévérité = **WARNING signal-only**.
+
 ## [1.13.0] — 2026-06-19
 
 ### Added
