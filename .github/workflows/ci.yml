@@ -99,4 +99,12 @@ jobs:
           printf '%s' '{"tool_name":"Write","tool_input":{"file_path":"README.md","content":"hello world"}}' \
             | RELAY_CONTEXT_BIN="$PWD/docs/scripts/relay-context.sh" docs/adapters/claude-code/relay-hook.sh > /dev/null \
             || { echo "::error::relay-hook.sh n'est pas exit-0 (l'adaptateur DOIT toujours fail-open)"; exit 1; }
-          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) + forecast (RELAY-FORECAST) + scan (RELAY-1) + context (RELAY-2) + hook-adapter (RELAY-3) OK"
+          # RELAY-TOKENS (Core actif « + ») : la métrique token-saved est propagée, informative pure (exit 0),
+          # sortie --json, et HONNÊTE sans ledger (firings=0, jamais un chiffre inventé).
+          [ -x docs/scripts/relay-tokens.sh ] \
+            || { echo "::error::docs/scripts/relay-tokens.sh absent/non exécutable après relay-init (RELAY-TOKENS)"; exit 1; }
+          ./docs/scripts/relay-tokens.sh --json > /dev/null \
+            || { echo "::error::relay-tokens.sh n'est pas exit-0 (doit être informatif pur, jamais un gate)"; exit 1; }
+          ./docs/scripts/relay-tokens.sh --json | grep -q '"firings": 0' \
+            || { echo "::error::relay-tokens.sh doit afficher firings=0 sans ledger (pas de chiffre inventé)"; exit 1; }
+          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) + forecast (RELAY-FORECAST) + scan (RELAY-1) + context (RELAY-2) + hook-adapter (RELAY-3) + tokens (RELAY-TOKENS) OK"

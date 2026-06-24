@@ -101,5 +101,23 @@ TEXT="$("$CONTEXT_BIN" --path="$FILE_PATH" --stdin < "$TMP_CONTENT" 2>/dev/null 
 
 # ── 5. Émettre la décision de hook PreToolUse (python3 pour un JSON valide, raison échappée) ────
 if [ "$ERR" -gt 0 ]; then DECISION="deny"; else DECISION="context"; fi
+
+# ── 5b. Ledger d'instance (token-saved) — 1 ligne par firing, lue par relay-tokens.sh ───────────
+#    deny = réécriture aval évitée (token-saved) ; context = injection amont (token-in). Source de la
+#    métrique runtime que ni git ni NEXT_SESSION ne portent. FAIL-OPEN absolu : un échec d'écriture
+#    du ledger ne doit JAMAIS bloquer l'édition (sous-shell, erreurs avalées). Gitignoré (donnée
+#    d'instance, même convention que relay-run.sh / docs/.relay/receipts).
+(
+  LEDGER_DIR="docs/.relay"
+  if mkdir -p "$LEDGER_DIR" 2>/dev/null; then
+    [ -f "$LEDGER_DIR/.gitignore" ] || printf 'receipts/\ntoken-ledger.log\n' > "$LEDGER_DIR/.gitignore" 2>/dev/null
+    grep -q '^token-ledger\.log$' "$LEDGER_DIR/.gitignore" 2>/dev/null \
+      || printf 'token-ledger.log\n' >> "$LEDGER_DIR/.gitignore" 2>/dev/null
+    printf '%s %s err=%s total=%s %s\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)" "$DECISION" "$ERR" "$TOTAL" "$FILE_PATH" \
+      >> "$LEDGER_DIR/token-ledger.log" 2>/dev/null
+  fi
+) 2>/dev/null || true
+
 printf '%s' "$TEXT" | "$PY" -c "$EMIT_PY" "$DECISION" 2>/dev/null
 exit 0

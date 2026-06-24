@@ -11,6 +11,33 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.19.0] — 2026-06-24
+
+### Added
+- **RELAY Core « actif » — métrique `token-saved`** (livrable « + » de la roadmap, cf.
+  `docs/RELAY-CORE-ACTIF.md §1.4/§3`). Matérialise l'angle produit chiffrable de RELAY (`VISION.md §4`) :
+  l'économie de tokens du shift-left, mesurée au runtime.
+  - **`engine/scripts/relay-tokens.sh`** — outil informatif **dédié** (pair de `relay-stats.sh` /
+    `relay-forecast.sh` ; choix user vs `relay-forecast.sh --tokens` — sources de données orthogonales :
+    ledger runtime vs backlog/git, unités tok vs pt). Lit le **ledger d'instance** et chiffre :
+    `token-in` = Σ firings × `RELAY_TOKEN_IN` (déf. 40 — injection amont, deny **ou** context) ;
+    `token-saved` = Σ deny × `RELAY_TOKEN_SAVED` (déf. 2000 — réécriture aval évitée, **deny seulement**,
+    conservateur) ; `net` = saved − in. Sortie humaine + `--json`. **Honnête sans données** : ledger
+    absent/vide → « pas encore de données », jamais un chiffre inventé (cohérent `relay-forecast`).
+    **Informatif pur** : exit 0 toujours, offline-safe.
+  - **Constantes overridables** (`RELAY_TOKEN_IN`, `RELAY_TOKEN_SAVED`) car `token-saved` est par nature
+    **contrefactuel** (la réécriture évitée n'a, par définition, jamais eu lieu) → **modélisé**, jamais
+    « mesuré » ; étiqueté comme estimation.
+  - **Instrumentation de l'adaptateur** : `engine/adapters/claude-code/relay-hook.sh` appende désormais
+    **1 ligne par firing** (`<ts> <deny|context> err=<n> total=<n> <fichier>`) dans
+    `docs/.relay/token-ledger.log`. Source de la métrique que ni git ni `NEXT_SESSION.md` ne portent.
+    **FAIL-OPEN préservé** : l'écriture du ledger est en sous-shell, un échec ne bloque jamais l'édition.
+    **Gitignoré** (donnée d'instance, self-deposit `.gitignore` — même convention que `relay-run.sh` /
+    `docs/.relay/receipts`).
+  - **Propagation** : auto via `relay-init`/`relay-update` (`engine/scripts/*.sh` → `docs/scripts/`).
+  - **CI** : assert `relay-tokens.sh` propagé + exécutable + exit 0 + `firings=0` honnête sans ledger,
+    miroir de RELAY-1/2/3.
+
 ## [1.18.0] — 2026-06-24
 
 ### Added

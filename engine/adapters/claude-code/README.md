@@ -23,6 +23,19 @@ clôture par `relay-check.sh` (a posteriori = réécriture = tokens).
 **FAIL-OPEN absolu** : python3 absent, JSON illisible, noyau introuvable, contenu vide → aucune sortie /
 exit 0. L'édition n'est **jamais** bloquée par un bug d'outillage.
 
+## Ledger token-saved (RELAY-TOKENS, v1.19.0)
+
+À chaque firing non-silencieux, le hook appende **1 ligne** dans `docs/.relay/token-ledger.log` :
+
+```
+<ISO8601> <deny|context> err=<n> total=<n> <fichier>
+```
+
+C'est la source runtime de la métrique `token-saved` que ni git ni `NEXT_SESSION.md` ne portent. La lire
+avec **`relay-tokens.sh`** (`token-in` amont vs `token-saved` aval évité ; `--json` dispo). L'écriture est
+en sous-shell : un échec n'enfreint **jamais** le fail-open. Le ledger est **gitignoré** (donnée
+d'instance, self-deposit `docs/.relay/.gitignore` — même convention que `relay-run.sh`).
+
 ## Câblage
 
 Dans le projet, ajouter à `.claude/settings.json` (le `settings.json` repo est versionné ; les choix
