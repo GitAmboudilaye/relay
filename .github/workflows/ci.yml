@@ -82,4 +82,9 @@ jobs:
             || { echo "::error::docs/scripts/relay-forecast.sh absent/non exécutable après relay-init (RELAY-FORECAST)"; exit 1; }
           ./docs/scripts/relay-forecast.sh --json > /dev/null \
             || { echo "::error::relay-forecast.sh n'est pas exit-0 (doit être informatif pur, jamais un gate)"; exit 1; }
-          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) + forecast (RELAY-FORECAST) OK"
+          # RELAY-1 (Core actif) : le noyau de scan ciblé est propagé, informatif pur (exit 0), sortie --json.
+          [ -x docs/scripts/relay-scan.sh ] \
+            || { echo "::error::docs/scripts/relay-scan.sh absent/non exécutable après relay-init (RELAY-1)"; exit 1; }
+          ./docs/scripts/relay-scan.sh "relay" --json > /dev/null \
+            || { echo "::error::relay-scan.sh n'est pas exit-0 (doit être informatif pur, jamais un gate)"; exit 1; }
+          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) + forecast (RELAY-FORECAST) + scan (RELAY-1) OK"
