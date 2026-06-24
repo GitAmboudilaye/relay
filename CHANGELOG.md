@@ -11,6 +11,62 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.19.0] — 2026-06-24
+
+### Added
+- **RELAY Core « actif » — métrique `token-saved`** (livrable « + » de la roadmap, cf.
+  `docs/RELAY-CORE-ACTIF.md §1.4/§3`). Matérialise l'angle produit chiffrable de RELAY (`VISION.md §4`) :
+  l'économie de tokens du shift-left, mesurée au runtime.
+  - **`engine/scripts/relay-tokens.sh`** — outil informatif **dédié** (pair de `relay-stats.sh` /
+    `relay-forecast.sh` ; choix user vs `relay-forecast.sh --tokens` — sources de données orthogonales :
+    ledger runtime vs backlog/git, unités tok vs pt). Lit le **ledger d'instance** et chiffre :
+    `token-in` = Σ firings × `RELAY_TOKEN_IN` (déf. 40 — injection amont, deny **ou** context) ;
+    `token-saved` = Σ deny × `RELAY_TOKEN_SAVED` (déf. 2000 — réécriture aval évitée, **deny seulement**,
+    conservateur) ; `net` = saved − in. Sortie humaine + `--json`. **Honnête sans données** : ledger
+    absent/vide → « pas encore de données », jamais un chiffre inventé (cohérent `relay-forecast`).
+    **Informatif pur** : exit 0 toujours, offline-safe.
+  - **Constantes overridables** (`RELAY_TOKEN_IN`, `RELAY_TOKEN_SAVED`) car `token-saved` est par nature
+    **contrefactuel** (la réécriture évitée n'a, par définition, jamais eu lieu) → **modélisé**, jamais
+    « mesuré » ; étiqueté comme estimation.
+  - **Instrumentation de l'adaptateur** : `engine/adapters/claude-code/relay-hook.sh` appende désormais
+    **1 ligne par firing** (`<ts> <deny|context> err=<n> total=<n> <fichier>`) dans
+    `docs/.relay/token-ledger.log`. Source de la métrique que ni git ni `NEXT_SESSION.md` ne portent.
+    **FAIL-OPEN préservé** : l'écriture du ledger est en sous-shell, un échec ne bloque jamais l'édition.
+    **Gitignoré** (donnée d'instance, self-deposit `.gitignore` — même convention que `relay-run.sh` /
+    `docs/.relay/receipts`).
+  - **Propagation** : auto via `relay-init`/`relay-update` (`engine/scripts/*.sh` → `docs/scripts/`).
+  - **CI** : assert `relay-tokens.sh` propagé + exécutable + exit 0 + `firings=0` honnête sans ledger,
+    miroir de RELAY-1/2/3.
+
+## [1.18.0] — 2026-06-24
+
+### Added
+- **RELAY Core « actif » — adaptateur hook `PreToolUse` Claude Code** (RELAY-3, 3ᵉ brique de la direction
+  « actif », cf. `docs/RELAY-CORE-ACTIF.md §3`). C'est le **premier ADAPTATEUR** : il câble le noyau
+  agnostique `relay-context.sh` (RELAY-2) dans Claude Code pour réaliser le **shift-left** — la règle
+  pertinente est injectée **avant** l'écriture, au lieu d'être sanctionnée à la clôture par
+  `relay-check.sh` (a posteriori = réécriture = tokens).
+  - **`engine/adapters/claude-code/relay-hook.sh`** — reçoit le JSON `PreToolUse` sur stdin
+    (`tool_input.file_path` + contenu **proposé** ; Edit `new_string` / Write `content`·`file_text` /
+    MultiEdit `edits[]`), pipe ce contenu à `relay-context.sh --path=<édité> --stdin` et **traduit** la
+    sortie du noyau en décision de hook :
+    - ≥1 pattern **ERROR** (proscrit) → `permissionDecision:"deny"` + `permissionDecisionReason` →
+      **bloque** l'écriture ; l'agent voit la raison et corrige **avant** d'écrire = réécriture aval évitée.
+    - seulement **WARN/INFO** → `additionalContext` (non-bloquant) → l'agent est informé, terse (§1.3).
+    - rien → **silence** (aucune sortie = flux de permission normal).
+  - **FAIL-OPEN absolu** : python3 absent, JSON illisible, noyau introuvable, contenu vide → exit 0
+    silencieux. L'édition n'est **jamais** bloquée par un bug d'outillage (un garde-fou qui casse
+    l'éditeur est pire que pas de garde-fou). python3 sert **uniquement** aux 2 frontières JSON ; le noyau
+    reste en Bash pur.
+  - **0 couplage noyau↔harnais (§1.2)** : toute la spécificité Claude Code vit dans l'adaptateur ;
+    `relay-context.sh` est inchangé. Un autre harnais (Cline = MCP, sans agent = git hook) recevra son
+    propre adaptateur appelant le **même** noyau.
+  - **Propagation** : `relay-init`/`relay-update` copient désormais `engine/adapters/<harnais>/*` →
+    `docs/adapters/<harnais>/*` (script **inerte** tant que non câblé). Le câblage reste un **choix du
+    projet** : snippet fourni dans `templates/.claude/settings.json` (matcher `Edit|Write|MultiEdit`),
+    jamais écrasé par l'init. Le dépôt canonique se **dogfoode** via `.claude/settings.json`.
+  - **CI** : assert `relay-hook.sh` propagé + exécutable + fail-open (exit 0), miroir de RELAY-1/2.
+
 ## [1.17.0] — 2026-06-23
 
 ### Added

@@ -207,6 +207,7 @@ fi
 
 ENGINE_SCRIPTS="$CANON_ROOT/engine/scripts"
 ENGINE_RULES="$CANON_ROOT/engine/rules"
+ENGINE_ADAPTERS="$CANON_ROOT/engine/adapters"
 for d in "$ENGINE_SCRIPTS" "$ENGINE_RULES"; do
   [ -d "$d" ] || { echo "[RELAY-UPDATE] ❌ Canonique incomplet : $d manquant"; exit 1; }
 done
@@ -227,6 +228,16 @@ for f in "$ENGINE_SCRIPTS"/*.sh; do
   copy_engine_file "$f" "docs/scripts/$(basename "$f")"
 done
 chmod +x docs/scripts/*.sh 2>/dev/null || true
+
+# Adaptateurs harnais (RELAY-3+) — engine/adapters/<harnais>/* → docs/adapters/<harnais>/*
+# Le SCRIPT d'adaptateur est inerte tant que le projet ne le câble pas (settings.json) → propagation
+# sûre. Le câblage (.claude/settings.json) reste un CHOIX du projet (template fourni, jamais écrasé).
+if [ -d "$ENGINE_ADAPTERS" ]; then
+  while IFS= read -r f; do
+    copy_engine_file "$f" "docs/adapters/${f#"$ENGINE_ADAPTERS"/}"
+  done < <(find "$ENGINE_ADAPTERS" -type f)
+  find docs/adapters -name '*.sh' -exec chmod +x {} \; 2>/dev/null || true
+fi
 
 # Règle moteur propagée = RELAY_PROTOCOL.md SEUL (§0-§7 portables ; §8 = pointeur statique).
 # RELAY_METRICS.md (compteurs) et RELAY_RULE_POOL.md (registre human-gated) sont des données

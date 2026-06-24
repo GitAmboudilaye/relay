@@ -43,6 +43,7 @@ BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CANON_ROOT="$(cd "$BIN_DIR/.." && pwd)"
 ENGINE_SCRIPTS="$CANON_ROOT/engine/scripts"
 ENGINE_RULES="$CANON_ROOT/engine/rules"
+ENGINE_ADAPTERS="$CANON_ROOT/engine/adapters"
 TEMPLATES="$CANON_ROOT/templates"
 VERSION=$(grep -oE "[0-9]+\.[0-9]+\.[0-9]+" "$CANON_ROOT/VERSION" 2>/dev/null | head -1 || echo "0.0.0")
 [ -z "$CANONICAL_URL" ] && CANONICAL_URL="$CANON_ROOT"
@@ -79,7 +80,16 @@ cp "$ENGINE_SCRIPTS"/*.sh docs/scripts/
 [ -f "$CANON_ROOT/bin/relay-update.sh" ] && cp "$CANON_ROOT/bin/relay-update.sh" docs/scripts/relay-update.sh
 chmod +x docs/scripts/*.sh 2>/dev/null || true
 cp "$ENGINE_RULES"/*.md docs/rules/
-echo "[RELAY-INIT] ✅ Moteur copié : docs/scripts/ ($(ls "$ENGINE_SCRIPTS" | wc -l | tr -d ' ') scripts + relay-update.sh) + docs/rules/ (règles RELAY)"
+# Adaptateurs harnais (RELAY-3+) — engine/adapters/<harnais>/* → docs/adapters/<harnais>/* (inertes
+# tant que non câblés dans .claude/settings.json ; câblage = choix du projet, template fourni).
+if [ -d "$ENGINE_ADAPTERS" ]; then
+  while IFS= read -r f; do
+    dest="docs/adapters/${f#"$ENGINE_ADAPTERS"/}"
+    mkdir -p "$(dirname "$dest")"; cp "$f" "$dest"
+  done < <(find "$ENGINE_ADAPTERS" -type f)
+  find docs/adapters -name '*.sh' -exec chmod +x {} \; 2>/dev/null || true
+fi
+echo "[RELAY-INIT] ✅ Moteur copié : docs/scripts/ ($(ls "$ENGINE_SCRIPTS" | wc -l | tr -d ' ') scripts + relay-update.sh) + docs/rules/ (règles RELAY) + docs/adapters/ (adaptateurs harnais)"
 
 # ── 2. Substitution des placeholders (helper) ────────────────────────────────
 # Rend un template vers une cible en remplaçant {{...}}. NE FAIT RIEN si la cible existe déjà.
