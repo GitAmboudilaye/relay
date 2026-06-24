@@ -11,6 +11,33 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.17.0] — 2026-06-23
+
+### Added
+- **RELAY Core « actif » — `relay-context.sh`** (RELAY-2, 2ᵉ brique de la direction « actif »,
+  cf. `docs/RELAY-CORE-ACTIF.md §3`). Là où `relay-scan.sh` (RELAY-1) répond « où est ce terme ? »,
+  `relay-context.sh` répond « quelle règle s'applique à CE fichier ? » — et l'émet **avant** l'écriture
+  (shift-left) au lieu de `relay-check.sh` qui sanctionne le diff **à la clôture** (a posteriori =
+  réécriture = tokens). C'est le **précurseur du hook PreToolUse** (RELAY-3) : un adaptateur appellera
+  ce noyau avec le chemin édité et placera sa sortie là où l'agent la voit.
+  - **Source de vérité = le MÊME `docs/.relay/rules.conf`** que `relay-check.sh` (0 règle dans le moteur,
+    parseur byte-fidèle : sections `[…]`, séparateur ` | `, champs `msg=`/`exclude=`/`exclude-path=`).
+    Pas de 2ᵉ convention à maintenir → anti-inflation (Pilier 11).
+  - **Déclenché par CONTENU (§1.3)** : grep le contenu du fichier et ne signale **que les patterns
+    réellement présents** — `[security_forbidden]`/`[forbidden_patterns]` (⛔ ERROR), `[regression_warn]`/
+    `[security_warn]`/`[design_warn_*]` (⚠️ WARN), `[security_surface]`/`[decision_surface]` (ℹ️ INFO).
+    **SILENCE total si rien** (token-négatif). Sections design **scopées par extension** (`.dart` /
+    `.css`+`.cshtml`), comme `relay-check §8`.
+  - **`--stdin`** : scanne le contenu *proposé* piped (le hook RELAY-3 lui passera l'édition à venir,
+    `--path=` servant alors uniquement au typage) → couvre le cas « fichier neuf » au bon niveau, sans
+    introduire de mur de règles statique.
+  - `--json` (adaptateurs), `--top=N` (borné), **exit 0 informatif** par défaut ; **`--strict`** → exit 3
+    si ≥1 hit ERROR (pour un gate, jamais imposé par le noyau).
+  - **0 dépendance harnais.** shellcheck CLEAN. Smoke jetable 25/26 (sandbox isolée `git -C` + sous-shell ;
+    le hit restant = faute d'accent du test, pas du script — assertion JSON `total=5` passée). Preuve
+    réelle : Controller AgriConnect → `security_surface authZ` (ancrage sécu AVANT édition).
+- **CI** : assert `relay-context.sh` propagé + informatif pur (exit 0, `--json`), miroir de RELAY-1.
+
 ## [1.16.0] — 2026-06-23
 
 ### Added
