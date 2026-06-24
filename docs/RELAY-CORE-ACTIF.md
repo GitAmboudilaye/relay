@@ -73,9 +73,9 @@ humain que par un adaptateur (hook/MCP). Conventions communes (alignées sur le 
 
 | Étape | Livrable | Nature | Dépend |
 |---|---|---|---|
-| **RELAY-1** | `relay-scan.sh` — recherche ciblée projet-wide, sortie structurée (cas d'usage : rename `AgriConnect→EcoAgriConnect`, `app→VraiKilo` ; preview d'impact). | **pur noyau**, 0 dépendance harnais, valeur immédiate | — |
-| **RELAY-2** | `relay-context.sh` — émet le contexte/règle pertinent pour un chemin donné (script d'abord, puis branché en hook). | noyau (script) → puis adaptateur | RELAY-1 |
-| **RELAY-3** | **Adaptateur hook PreToolUse Claude Code** — câble `relay-context.sh` dans `settings.json` (remplace le démon). | adaptateur | RELAY-2 |
+| **RELAY-1** ✅ v1.16.0 | `relay-scan.sh` — recherche ciblée projet-wide, sortie structurée (cas d'usage : rename `AgriConnect→EcoAgriConnect`, `app→VraiKilo` ; preview d'impact). | **pur noyau**, 0 dépendance harnais, valeur immédiate | — |
+| **RELAY-2** ✅ v1.17.0 | `relay-context.sh` — émet le contexte/règle pertinent pour un chemin donné (script d'abord, puis branché en hook). Réutilise `rules.conf`, déclenché par contenu (§1.3) + `--stdin` (contenu proposé). | noyau (script) → puis adaptateur | RELAY-1 |
+| **RELAY-3** ⏳ | **Adaptateur hook PreToolUse Claude Code** — câble `relay-context.sh --path=<édité> --stdin` dans `settings.json` (remplace le démon). | adaptateur | RELAY-2 |
 | **+** | Métrique **token-saved** (token-in amont vs réécriture aval évitée). | mesure | RELAY-3 |
 
 **Principe de séquencement** : on livre d'abord le **noyau** (valeur même sans agent), puis on le **câble**.
