@@ -72,10 +72,24 @@ emit_empty() {
 [ -z "$CONTENT" ] && emit_empty
 
 # ── Sections applicables selon le TYPE du fichier (--path) ─────────────────────────────────────
-# Universelles : s'appliquent à tout fichier. Design : scopées par extension (comme relay-check §8).
+# Universelles : s'appliquent à tout fichier de CODE. Design : scopées par extension (comme relay-check §8).
 # Format émis : « <section> <severity> ».
+#
+# PROSE (.md/.txt/…) — cas spécial (cf. ledger live 2026-06-24, faux positif `deny` sur SESSIONS_LOG.md) :
+# un document qui DOCUMENTE un anti-pattern n'en est pas un. Les sections d'idiome CODE (forbidden_patterns,
+# regression_warn) et les surfaces par mot-clé (security_surface/decision_surface : « auth », « token »… qu'un
+# doc en français matche en permanence) y sont du pur faux positif → un `deny` parasite force la réécriture
+# d'un doc légitime = tokens gaspillés, l'inverse exact de la thèse RELAY (VISION §4). SEUL `security_forbidden`
+# reste actif sur prose : une VRAIE clé privée/AKIA littérale collée dans un doc est une fuite réelle, et ces
+# patterns sont quasi-zéro-faux-positif (bloc littéral, pas « de la prose qui cite »). Décision user 2026-06-24.
 applicable_sections() {
-  # universelles (ordre = ordre d'affichage : ERROR d'abord)
+  case "$PATH_ARG" in
+    *.md|*.markdown|*.txt|*.rst|*.adoc)
+      printf '%s\n' "security_forbidden ERROR"   # prose : seul un secret littéral commité justifie un signal
+      return
+      ;;
+  esac
+  # universelles aux fichiers de CODE (ordre = ordre d'affichage : ERROR d'abord)
   printf '%s\n' \
     "security_forbidden ERROR" \
     "forbidden_patterns ERROR" \
