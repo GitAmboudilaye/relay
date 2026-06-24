@@ -11,6 +11,35 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.18.0] — 2026-06-24
+
+### Added
+- **RELAY Core « actif » — adaptateur hook `PreToolUse` Claude Code** (RELAY-3, 3ᵉ brique de la direction
+  « actif », cf. `docs/RELAY-CORE-ACTIF.md §3`). C'est le **premier ADAPTATEUR** : il câble le noyau
+  agnostique `relay-context.sh` (RELAY-2) dans Claude Code pour réaliser le **shift-left** — la règle
+  pertinente est injectée **avant** l'écriture, au lieu d'être sanctionnée à la clôture par
+  `relay-check.sh` (a posteriori = réécriture = tokens).
+  - **`engine/adapters/claude-code/relay-hook.sh`** — reçoit le JSON `PreToolUse` sur stdin
+    (`tool_input.file_path` + contenu **proposé** ; Edit `new_string` / Write `content`·`file_text` /
+    MultiEdit `edits[]`), pipe ce contenu à `relay-context.sh --path=<édité> --stdin` et **traduit** la
+    sortie du noyau en décision de hook :
+    - ≥1 pattern **ERROR** (proscrit) → `permissionDecision:"deny"` + `permissionDecisionReason` →
+      **bloque** l'écriture ; l'agent voit la raison et corrige **avant** d'écrire = réécriture aval évitée.
+    - seulement **WARN/INFO** → `additionalContext` (non-bloquant) → l'agent est informé, terse (§1.3).
+    - rien → **silence** (aucune sortie = flux de permission normal).
+  - **FAIL-OPEN absolu** : python3 absent, JSON illisible, noyau introuvable, contenu vide → exit 0
+    silencieux. L'édition n'est **jamais** bloquée par un bug d'outillage (un garde-fou qui casse
+    l'éditeur est pire que pas de garde-fou). python3 sert **uniquement** aux 2 frontières JSON ; le noyau
+    reste en Bash pur.
+  - **0 couplage noyau↔harnais (§1.2)** : toute la spécificité Claude Code vit dans l'adaptateur ;
+    `relay-context.sh` est inchangé. Un autre harnais (Cline = MCP, sans agent = git hook) recevra son
+    propre adaptateur appelant le **même** noyau.
+  - **Propagation** : `relay-init`/`relay-update` copient désormais `engine/adapters/<harnais>/*` →
+    `docs/adapters/<harnais>/*` (script **inerte** tant que non câblé). Le câblage reste un **choix du
+    projet** : snippet fourni dans `templates/.claude/settings.json` (matcher `Edit|Write|MultiEdit`),
+    jamais écrasé par l'init. Le dépôt canonique se **dogfoode** via `.claude/settings.json`.
+  - **CI** : assert `relay-hook.sh` propagé + exécutable + fail-open (exit 0), miroir de RELAY-1/2.
+
 ## [1.17.0] — 2026-06-23
 
 ### Added
