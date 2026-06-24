@@ -11,6 +11,31 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.16.0] — 2026-06-23
+
+### Added
+- **RELAY Core « actif » — `relay-scan.sh`** (RELAY-1, première brique de la direction « actif »
+  validée user 2026-06-23, cf. `docs/RELAY-CORE-ACTIF.md`). Constat : RELAY est **passif** —
+  `relay-check.sh` est joué *à la clôture, par le LLM* → l'enforcement arrive **après** l'écriture
+  = réécriture = tokens gaspillés. La direction « actif » vise le **shift-left** (injecter le contexte
+  *avant* l'écriture). `relay-scan.sh` est le **premier noyau** : un scan ciblé projet-wide à **sortie
+  structurée et bornée** (« contrat RELAY »), **0 dépendance harnais**.
+  - Cherche les fichiers **suivis** (`git grep`, respecte `.gitignore` ; repli `grep -r` hors dépôt).
+  - Résumé : total occurrences + fichiers, **breakdown par surface** (code / markup / style / config /
+    docs / other), **top-N fichiers**. Borné (jamais un dump = anti-tokens). Mode `--json` pour les
+    adaptateurs (hook/MCP).
+  - **`--replace=<new>`** : *preview d'impact de renommage* — heuristique séparant les occurrences
+    **EMBARQUÉES** dans un identifiant/chemin (namespace, fichier, URL → risquées en remplacement
+    aveugle) des **STANDALONE** (prose → probablement sûres). Pré-calcule l'intelligence qu'un
+    `sed/perl` global confond (cas réels : `AgriConnect.Web`/`.apk` vs prose, cascade DS).
+  - **Informatif pur** (exit 0), token-négatif (un résumé en amont vs N greps + lecture de dumps).
+  - Propagé par le glob `engine/scripts/*.sh` ; assert CI ajouté ; smoke jetable **10/10 PASS**
+    (total/files, surfaces, top, `--replace` embedded/standalone, `--json`, 0-occurrence, `--fixed`
+    littéral, exit 0). shellcheck CLEAN.
+- **`docs/RELAY-CORE-ACTIF.md`** — cadrage d'architecture de la phase « actif » (hook ≠ démon ; noyau
+  portable + adaptateurs par harnais ; linter terse conditionnel ; métrique token-saved ; roadmap
+  RELAY-1 `relay-scan.sh` → RELAY-2 `relay-context.sh` → RELAY-3 adaptateur hook PreToolUse).
+
 ## [1.15.0] — 2026-06-20
 
 ### Added
