@@ -11,6 +11,23 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.19.1] — 2026-06-24
+
+### Fixed
+- **Faux positif du noyau `relay-context.sh` sur les fichiers PROSE** (`.md`/`.txt`/…), confirmé par le
+  **ledger live** du premier déploiement du hook RELAY-3 (2026-06-24) : un `deny` parasite a bloqué un
+  `SESSIONS_LOG.md` parce que sa prose **citait** des regex d'anti-pattern (`.Result`, `.Include().Select()`),
+  + des `context` parasites sur tout `.md` mentionnant « auth »/« token ». Un `deny` à tort force la
+  réécriture d'un doc légitime = **tokens gaspillés**, l'inverse exact de la thèse RELAY (`VISION.md §4`).
+  - `applicable_sections()` traite désormais les extensions prose (`.md .markdown .txt .rst .adoc`) en
+    cas spécial : seul **`security_forbidden`** y reste actif (une **vraie** clé privée/AKIA littérale
+    collée dans un doc est une fuite réelle, et ces patterns sont quasi-zéro-faux-positif). Les sections
+    d'idiome **code** (`forbidden_patterns`, `regression_warn`) et les surfaces par mot-clé
+    (`security_surface`, `decision_surface`, `security_warn`) **sautent** sur prose.
+  - **0 régression code** : les fichiers de code conservent toutes les sections (universelles + design).
+    Décision user 2026-06-24 (garder la détection de secrets sur prose). Fix dans le **noyau** → tous les
+    adaptateurs (hook Claude Code et suivants) en bénéficient sans modification (0 couplage harnais).
+
 ## [1.19.0] — 2026-06-24
 
 ### Added
