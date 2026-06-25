@@ -36,7 +36,7 @@ jamais le canal principal.
 | Couche | Rôle | Exemples |
 |---|---|---|
 | **NOYAU** | scripts Bash à **sortie texte structurée** = le « contrat RELAY ». Agnostique, 0 dépendance harnais. | `relay-scan.sh`, `relay-context.sh`, `relay-check.sh` |
-| **ADAPTATEUR** | câblage par harnais qui *appelle* le noyau et place sa sortie là où l'agent la voit. | Claude Code = hook `settings.json` · Cline = MCP · sans agent = git hook |
+| **ADAPTATEUR** | câblage par harnais qui *appelle* le noyau et place sa sortie là où l'agent la voit. | Claude Code = hook `settings.json` · Cline = hook `PreToolUse` (v3.36+ ; ⚠️ « = MCP » périmé, voir RELAY-CLINE v1.20.0) · sans agent = git hook |
 
 **Ne jamais coupler le noyau à un harnais.** C'est ce qui garde RELAY agnostique (déjà prouvé cross-stack
 en sandbox) et donc réutilisable/vendable. Un adaptateur peut disparaître sans toucher le noyau.
@@ -77,6 +77,7 @@ humain que par un adaptateur (hook/MCP). Conventions communes (alignées sur le 
 | **RELAY-2** ✅ v1.17.0 | `relay-context.sh` — émet le contexte/règle pertinent pour un chemin donné (script d'abord, puis branché en hook). Réutilise `rules.conf`, déclenché par contenu (§1.3) + `--stdin` (contenu proposé). | noyau (script) → puis adaptateur | RELAY-1 |
 | **RELAY-3** ✅ v1.18.0 | **Adaptateur hook PreToolUse Claude Code** — `engine/adapters/claude-code/relay-hook.sh` câble `relay-context.sh --path=<édité> --stdin` dans `.claude/settings.json` (matcher `Edit\|Write\|MultiEdit`). ERROR→`deny`, WARN/INFO→`additionalContext`, rien→silence. FAIL-OPEN absolu. Propagé en `docs/adapters/`. | adaptateur | RELAY-2 |
 | **+** ✅ v1.19.0 | Métrique **token-saved** — outil dédié `relay-tokens.sh` (choix user vs `--tokens` : sources orthogonales). L'adaptateur hook appende un **ledger d'instance** (`docs/.relay/token-ledger.log`, gitignoré, fail-open) ; l'outil chiffre `token-in` (Σ firings × 40) vs `token-saved` (Σ deny × 2000, conservateur), constantes overridables. token-saved = **contrefactuel → modélisé**, jamais inventé sans données. | mesure | RELAY-3 |
+| **RELAY-CLINE** ✅ v1.20.0 | **2ᵉ adaptateur — hook `PreToolUse` Cline** — `engine/adapters/cline/relay-precheck.sh` câble le **même** `relay-context.sh` dans Cline (v3.36+). Première preuve de **généralisation N>1** de la couche actif. ERROR→`{"cancel":true,"errorMessage"}`, WARN/INFO→`{"cancel":false,"contextModification"}`, rien→`{"cancel":false}` (ALLOW explicite). **Parité d'enforcement** (deny réel) : rectifie l'hypothèse « Cline = MCP » (les hooks Cline ont rendu MCP inutile ici). Résolution symlink-safe, FAIL-OPEN, ledger token-saved partagé. | adaptateur | RELAY-3 |
 
 **Principe de séquencement** : on livre d'abord le **noyau** (valeur même sans agent), puis on le **câble**.
 Jamais l'inverse — un adaptateur sans noyau testable n'est pas vérifiable.

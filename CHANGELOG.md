@@ -11,6 +11,29 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.20.0] — 2026-06-24
+
+### Added
+- **RELAY-CLINE — 2ᵉ adaptateur du framework : hook `PreToolUse` pour [Cline](https://cline.bot)**
+  (`engine/adapters/cline/relay-precheck.sh`). Première preuve de **généralisation N>1** de la couche
+  « actif » : un second harnais câble le **même** noyau `relay-context.sh`, 0 couplage (§1.2). Reçoit le
+  JSON `PreToolUse` de Cline (`toolName` + `parameters.{path, content|diff}`), pipe le contenu **proposé**
+  à `relay-context.sh --path --stdin`, et traduit : **ERROR → `{"cancel": true, "errorMessage": …}`**
+  (bloque), **WARN/INFO → `{"cancel": false, "contextModification": …}`** (injecte), **rien/défaillance →
+  `{"cancel": false}`** (ALLOW explicite — contrat Cline, ≠ le « silence sans sortie » de Claude Code).
+  - **Parité d'enforcement avec Claude Code** : grâce aux **hooks bloquants de Cline (v3.36+)**, on obtient
+    un `deny` réel, pas seulement de l'advisory. Cela **rectifie l'hypothèse « Cline = MCP »** des notes de
+    cadrage (écrites avant que Cline n'ait des hooks) : le hook est strictement supérieur et plus simple
+    (aucun serveur MCP). Voir `engine/adapters/cline/README.md` (§ « Mise à jour de cap »).
+  - **Résolution de chemin symlink-safe** (`readlink -f` + repli racine git) — nécessaire car Cline impose
+    un fichier nommé exactement `PreToolUse` (sans extension) qui pointe vers l'adaptateur par symlink.
+  - **FAIL-OPEN absolu** (python3 absent, JSON illisible, noyau introuvable, contenu vide, outil
+    non-écriture → ALLOW). **Ledger token-saved** au **même format** que l'adaptateur Claude Code →
+    `relay-tokens.sh` agrège les **deux** harnais sans modification.
+  - Propagé en `docs/adapters/cline/` par `relay-init`/`relay-update` (mécanisme générique
+    `engine/adapters/<h>/*`, 0 changement aux scripts de propagation). CI : assert propagé + exécutable +
+    fail-open (ALLOW explicite), miroir RELAY-1/2/3. shellcheck CLEAN, smoke jetable **9/9**.
+
 ## [1.19.1] — 2026-06-24
 
 ### Fixed

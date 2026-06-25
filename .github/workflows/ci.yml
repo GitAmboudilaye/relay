@@ -15,8 +15,9 @@ jobs:
       - uses: actions/checkout@v4
 
       # 1. ShellCheck — les ERREURS bloquent (warnings/style tolérés pour l'instant).
+      #    Couvre le noyau (scripts), le bootstrap (bin) ET les adaptateurs harnais (engine/adapters).
       - name: ShellCheck (severity=error)
-        run: shellcheck --severity=error engine/scripts/*.sh bin/*.sh
+        run: shellcheck --severity=error engine/scripts/*.sh bin/*.sh engine/adapters/*/*.sh
 
       # 2. Pureté du moteur — aucune identité de projet en dur (principe anti-drift).
       - name: Engine purity (no project identity hardcoded)
@@ -99,6 +100,16 @@ jobs:
           printf '%s' '{"tool_name":"Write","tool_input":{"file_path":"README.md","content":"hello world"}}' \
             | RELAY_CONTEXT_BIN="$PWD/docs/scripts/relay-context.sh" docs/adapters/claude-code/relay-hook.sh > /dev/null \
             || { echo "::error::relay-hook.sh n'est pas exit-0 (l'adaptateur DOIT toujours fail-open)"; exit 1; }
+          # RELAY-CLINE (Core actif) : le 2ᵉ adaptateur (hook PreToolUse Cline) est propagé + exécutable,
+          # FAIL-OPEN (toujours exit 0), et renvoie un ALLOW explicite {"cancel": false} (contrat Cline ≠
+          # silence) sur un contenu propre — jamais bloquant par défaut.
+          [ -x docs/adapters/cline/relay-precheck.sh ] \
+            || { echo "::error::docs/adapters/cline/relay-precheck.sh absent/non exécutable après relay-init (RELAY-CLINE)"; exit 1; }
+          CLINE_OUT="$(printf '%s' '{"toolName":"write_to_file","parameters":{"path":"README.md","content":"hello world"}}' \
+            | RELAY_CONTEXT_BIN="$PWD/docs/scripts/relay-context.sh" docs/adapters/cline/relay-precheck.sh)" \
+            || { echo "::error::relay-precheck.sh n'est pas exit-0 (l'adaptateur DOIT toujours fail-open)"; exit 1; }
+          printf '%s' "$CLINE_OUT" | grep -q '"cancel": false' \
+            || { echo "::error::relay-precheck.sh doit renvoyer un ALLOW explicite {\"cancel\": false} sur contenu propre (contrat Cline)"; exit 1; }
           # RELAY-TOKENS (Core actif « + ») : la métrique token-saved est propagée, informative pure (exit 0),
           # sortie --json, et HONNÊTE sans ledger (firings=0, jamais un chiffre inventé).
           [ -x docs/scripts/relay-tokens.sh ] \
@@ -107,4 +118,4 @@ jobs:
             || { echo "::error::relay-tokens.sh n'est pas exit-0 (doit être informatif pur, jamais un gate)"; exit 1; }
           ./docs/scripts/relay-tokens.sh --json | grep -q '"firings": 0' \
             || { echo "::error::relay-tokens.sh doit afficher firings=0 sans ledger (pas de chiffre inventé)"; exit 1; }
-          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) + forecast (RELAY-FORECAST) + scan (RELAY-1) + context (RELAY-2) + hook-adapter (RELAY-3) + tokens (RELAY-TOKENS) OK"
+          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) + forecast (RELAY-FORECAST) + scan (RELAY-1) + context (RELAY-2) + hook-adapter (RELAY-3) + cline-adapter (RELAY-CLINE) + tokens (RELAY-TOKENS) OK"
