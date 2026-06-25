@@ -20,6 +20,17 @@
 #   • CI / range : RELAY_RANGE défini (ex. origin/main...HEAD) → fichiers du diff ; contenu = arbre courant
 #                  (en CI le checkout est sur la pointe).
 #
+# MODE DIFF-ONLY (opt-in : RELAY_DIFF_ONLY=1 ou --diff-only) — débloque le BROWNFIELD :
+#   Au lieu du contenu ENTIER du fichier touché, on ne pipe au noyau que ses LIGNES AJOUTÉES
+#   (git diff -U0, lignes « + », préfixe diff retiré). Sur un dépôt légataire (ex. AgriConnect), éditer
+#   un fichier qui contient DÉJÀ un `.Result`/`localhost:7285` n'échoue plus à cause de cette ligne non
+#   touchée : seul ce qu'on AJOUTE est jugé. C'est un PRÉ-FILTRE 100 % adaptateur — relay-context.sh reste
+#   agnostique (§1.2) : il grep le contenu reçu sur --stdin, peu importe que ce soit le fichier ou le diff.
+#   ⚠️ Compromis SÉCURITÉ assumé (raison du choix OPT-IN, décision user 2026-06-24) : en diff-only une clé
+#   AKIA / un secret PRÉEXISTANT dans un fichier touché mais NON modifié n'est plus flagué. Le DÉFAUT
+#   reste donc le scan plein-fichier (greenfield/CI strict : ne rien changer). Le brownfield active
+#   explicitement le mode et accepte ce compromis.
+#
 # DIFFÉRENCE STRUCTURANTE vs les adaptateurs d'AGENT (relay-hook.sh / relay-precheck.sh) :
 #   FAIL-OPEN sur l'OUTILLAGE, FAIL-CLOSED sur le FINDING. Les adaptateurs agent sont PUREMENT fail-open
 #   (un hook cassé ne bloque jamais une édition). Ici le BUT MÊME est de bloquer sur un pattern proscrit :
@@ -40,6 +51,21 @@ set -uo pipefail
 
 # ── Échappatoire explicite (git --no-verify court-circuite aussi tout hook pre-commit) ─────────────
 case "${RELAY_SKIP:-}" in 1|true|yes|on) exit 0 ;; esac
+
+# ── Mode DIFF-ONLY (opt-in) : env RELAY_DIFF_ONLY ou flag --diff-only ───────────────────────────────
+DIFF_ONLY=false
+case "${RELAY_DIFF_ONLY:-}" in 1|true|yes|on) DIFF_ONLY=true ;; esac
+for arg in "$@"; do
+  case "$arg" in
+    --diff-only) DIFF_ONLY=true ;;
+    *)           : ;;   # git peut passer des args de hook ; on les ignore (ergonomie fail-open)
+  esac
+done
+
+# Extrait les LIGNES AJOUTÉES d'un diff -U0 sur stdin : lignes « + » (préfixe diff retiré), header
+# « +++ b/file » exclu. Une ligne de code qui commence elle-même par « + » est préservée (on n'exclut
+# que le header exact « +++ <espace> », jamais un « ++++code »).
+added_lines() { grep -E '^\+' | grep -vE '^\+\+\+ ' | sed 's/^+//'; }
 
 # ── 0. git requis ; absent ou hors dépôt → fail-open (bug d'outillage ne bloque jamais un commit) ──
 command -v git >/dev/null 2>&1 || exit 0
@@ -78,8 +104,15 @@ ADVISORY=""
 ERRORS=""
 while IFS= read -r f; do
   [ -z "$f" ] && continue
-  # Source du contenu PROPOSÉ selon le mode
-  if [ "$MODE" = "range" ]; then
+  # Source du contenu PROPOSÉ selon le mode (et selon diff-only : lignes ajoutées vs fichier entier)
+  if $DIFF_ONLY; then
+    # Pré-filtre adaptateur : seules les lignes AJOUTÉES (noyau inchangé, §1.2)
+    if [ "$MODE" = "range" ]; then
+      CONTENT="$(git diff -U0 "$RELAY_RANGE" --diff-filter=ACMR -- "$f" 2>/dev/null | added_lines || true)"
+    else
+      CONTENT="$(git diff --cached -U0 --diff-filter=ACMR -- "$f" 2>/dev/null | added_lines || true)"
+    fi
+  elif [ "$MODE" = "range" ]; then
     [ -f "$ROOT/$f" ] || continue
     CONTENT="$(cat -- "$ROOT/$f" 2>/dev/null || true)"
   else
