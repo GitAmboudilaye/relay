@@ -11,6 +11,33 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.21.0] — 2026-06-24
+
+### Added
+- **RELAY-NOAGENT — 3ᵉ adaptateur du framework : scénario SANS agent (git pre-commit / CI)**
+  (`engine/adapters/no-agent/relay-precommit.sh`). Câble le **même** noyau `relay-context.sh`, 0 couplage
+  (§1.2). C'est le canal **dégradé** prévu par `RELAY-CORE-ACTIF.md §1.1` : sans agent, il n'existe aucun
+  contexte LLM où injecter la règle *avant* l'écriture → la seule barrière est **en aval**, au commit ou
+  dans la CI, et le canal d'enforcement n'est plus un JSON de décision (comme les hooks d'agent) mais le
+  **code de sortie**. Pipe le contenu **proposé** de chaque fichier touché à
+  `relay-context.sh --path --stdin --strict` et agrège : **ERROR (proscrit) → exit 1** (bloque le commit /
+  fait échouer le job), **WARN/INFO → advisory non-bloquant**, **rien → silence** (§1.3).
+  - **Deux modes, un script** : *pre-commit* (défaut — fichiers stagés, contenu = blob d'index
+    `git show :file` = ce qui va être committé) et *CI/range* (`RELAY_RANGE=base...HEAD` — diff de la plage,
+    contenu = arbre courant).
+  - **Sémantique d'enforcement INVERSE des adaptateurs d'agent** (décision user) : fail-**OPEN** sur
+    l'OUTILLAGE (git absent, hors dépôt, `rules.conf`/noyau introuvable → exit 0 : ne jamais coincer un
+    commit pour un bug d'outil) mais fail-**CLOSED** sur le FINDING (pattern proscrit → exit 1 : bloque —
+    c'est tout l'intérêt du canal). Échappatoire explicite `RELAY_SKIP=1` / `git commit --no-verify`.
+  - **Pur Bash, 0 python3** : aucune frontière JSON (git fournit la liste de fichiers, le noyau le texte +
+    l'exit code) → plus portable encore que les adaptateurs d'agent.
+  - **N'écrit PAS le ledger token-saved** (volontaire) : `relay-tokens` modélise l'économie de réécriture
+    LLM ; un commit humain bloqué n'en est pas une → l'y inscrire corromprait la métrique (même discipline
+    que « token-saved = contrefactuel, jamais inventé »).
+  - Propagé en `docs/adapters/no-agent/` par `relay-init`/`relay-update` (mécanisme générique
+    `engine/adapters/<h>/*`, 0 changement aux scripts de propagation). CI : assert propagé + exécutable +
+    propre→exit 0 + clé AKIA stagée→exit 1, miroir RELAY-3/CLINE. shellcheck CLEAN, smoke jetable **10/10**.
+
 ## [1.20.0] — 2026-06-24
 
 ### Added

@@ -36,7 +36,7 @@ jamais le canal principal.
 | Couche | Rôle | Exemples |
 |---|---|---|
 | **NOYAU** | scripts Bash à **sortie texte structurée** = le « contrat RELAY ». Agnostique, 0 dépendance harnais. | `relay-scan.sh`, `relay-context.sh`, `relay-check.sh` |
-| **ADAPTATEUR** | câblage par harnais qui *appelle* le noyau et place sa sortie là où l'agent la voit. | Claude Code = hook `settings.json` · Cline = hook `PreToolUse` (v3.36+ ; ⚠️ « = MCP » périmé, voir RELAY-CLINE v1.20.0) · sans agent = git hook |
+| **ADAPTATEUR** | câblage par harnais qui *appelle* le noyau et place sa sortie là où l'agent la voit. | Claude Code = hook `settings.json` · Cline = hook `PreToolUse` (v3.36+ ; ⚠️ « = MCP » périmé, voir RELAY-CLINE v1.20.0) · sans agent = git pre-commit / CI (RELAY-NOAGENT v1.21.0) |
 
 **Ne jamais coupler le noyau à un harnais.** C'est ce qui garde RELAY agnostique (déjà prouvé cross-stack
 en sandbox) et donc réutilisable/vendable. Un adaptateur peut disparaître sans toucher le noyau.
@@ -78,6 +78,7 @@ humain que par un adaptateur (hook/MCP). Conventions communes (alignées sur le 
 | **RELAY-3** ✅ v1.18.0 | **Adaptateur hook PreToolUse Claude Code** — `engine/adapters/claude-code/relay-hook.sh` câble `relay-context.sh --path=<édité> --stdin` dans `.claude/settings.json` (matcher `Edit\|Write\|MultiEdit`). ERROR→`deny`, WARN/INFO→`additionalContext`, rien→silence. FAIL-OPEN absolu. Propagé en `docs/adapters/`. | adaptateur | RELAY-2 |
 | **+** ✅ v1.19.0 | Métrique **token-saved** — outil dédié `relay-tokens.sh` (choix user vs `--tokens` : sources orthogonales). L'adaptateur hook appende un **ledger d'instance** (`docs/.relay/token-ledger.log`, gitignoré, fail-open) ; l'outil chiffre `token-in` (Σ firings × 40) vs `token-saved` (Σ deny × 2000, conservateur), constantes overridables. token-saved = **contrefactuel → modélisé**, jamais inventé sans données. | mesure | RELAY-3 |
 | **RELAY-CLINE** ✅ v1.20.0 | **2ᵉ adaptateur — hook `PreToolUse` Cline** — `engine/adapters/cline/relay-precheck.sh` câble le **même** `relay-context.sh` dans Cline (v3.36+). Première preuve de **généralisation N>1** de la couche actif. ERROR→`{"cancel":true,"errorMessage"}`, WARN/INFO→`{"cancel":false,"contextModification"}`, rien→`{"cancel":false}` (ALLOW explicite). **Parité d'enforcement** (deny réel) : rectifie l'hypothèse « Cline = MCP » (les hooks Cline ont rendu MCP inutile ici). Résolution symlink-safe, FAIL-OPEN, ledger token-saved partagé. | adaptateur | RELAY-3 |
+| **RELAY-NOAGENT** ✅ v1.21.0 | **3ᵉ adaptateur — scénario SANS agent (git pre-commit / CI)** — `engine/adapters/no-agent/relay-precommit.sh` câble le **même** `relay-context.sh --strict` sur les fichiers stagés (ou le diff `RELAY_RANGE` en CI). Réalise le canal **dégradé** de §1.1 : sans contexte LLM, l'enforcement = **code de sortie** (ERROR→exit 1 bloque le commit/job ; WARN/INFO→advisory ; rien→silence). Sémantique **inverse** des adaptateurs d'agent : fail-**OPEN** outillage / fail-**CLOSED** finding (le but est de bloquer). Pur Bash (0 python3), **n'écrit PAS** le ledger (un commit humain bloqué ≠ réécriture LLM évitée). Bypass `RELAY_SKIP=1`/`--no-verify`. | adaptateur (dégradé) | RELAY-2 |
 
 **Principe de séquencement** : on livre d'abord le **noyau** (valeur même sans agent), puis on le **câble**.
 Jamais l'inverse — un adaptateur sans noyau testable n'est pas vérifiable.
