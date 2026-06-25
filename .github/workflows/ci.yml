@@ -157,4 +157,17 @@ jobs:
             echo "::error::diff-only doit exit-1 (BLOQUER) sur un secret AJOUTÉ (fail-closed sur finding neuf)"; exit 1
           fi
           git rm -q --cached brown.js && rm -f brown.js
-          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) + forecast (RELAY-FORECAST) + scan (RELAY-1) + context (RELAY-2) + hook-adapter (RELAY-3) + cline-adapter (RELAY-CLINE) + tokens (RELAY-TOKENS) + noagent-adapter (RELAY-NOAGENT) + noagent-diffonly (RELAY-NOAGENT-DIFFONLY) OK"
+          # RELAY-COMMENT-FALSEPOS (Core actif) : une ligne 100 %-COMMENTAIRE qui CITE un idiome proscrit ne
+          # doit PLUS déclencher de hit (faux positif live 2026-06-25, RELAY-NOAGENT-WIRE — exception prose
+          # étendue à la granularité ligne) ; le MÊME idiome sur une VRAIE ligne de code DOIT bloquer (exit 3) ;
+          # security_forbidden reste sur le contenu entier (déjà couvert plus haut : AKIA en code → bloque).
+          # On injecte un forbidden_pattern actif (le template laisse la section en exemples commentés).
+          printf '\n[forbidden_patterns]\nBLOQUANT_IDIOME\n' >> docs/.relay/rules.conf
+          printf '%s\n' '// éviter BLOQUANT_IDIOME ici' 'int x = 0;' \
+            | ./docs/scripts/relay-context.sh --path=Foo.cs --stdin --strict > /dev/null \
+            || { echo "::error::un commentaire citant un idiome proscrit NE doit PAS bloquer (RELAY-COMMENT-FALSEPOS)"; exit 1; }
+          if printf '%s\n' 'var x = BLOQUANT_IDIOME;' \
+            | ./docs/scripts/relay-context.sh --path=Foo.cs --stdin --strict > /dev/null; then
+            echo "::error::le MÊME idiome sur une VRAIE ligne de code DOIT bloquer (exit 3)"; exit 1
+          fi
+          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) + forecast (RELAY-FORECAST) + scan (RELAY-1) + context (RELAY-2) + hook-adapter (RELAY-3) + cline-adapter (RELAY-CLINE) + tokens (RELAY-TOKENS) + noagent-adapter (RELAY-NOAGENT) + noagent-diffonly (RELAY-NOAGENT-DIFFONLY) + comment-falsepos (RELAY-COMMENT-FALSEPOS) OK"
