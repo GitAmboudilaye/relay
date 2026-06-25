@@ -22,8 +22,8 @@
 #
 # MODE DIFF-ONLY (opt-in : RELAY_DIFF_ONLY=1 ou --diff-only) — débloque le BROWNFIELD :
 #   Au lieu du contenu ENTIER du fichier touché, on ne pipe au noyau que ses LIGNES AJOUTÉES
-#   (git diff -U0, lignes « + », préfixe diff retiré). Sur un dépôt légataire (ex. AgriConnect), éditer
-#   un fichier qui contient DÉJÀ un `.Result`/`localhost:7285` n'échoue plus à cause de cette ligne non
+#   (git diff -U0, lignes « + », préfixe diff retiré). Sur un dépôt légataire (brownfield), éditer
+#   un fichier qui contient DÉJÀ un pattern proscrit légataire n'échoue plus à cause de cette ligne non
 #   touchée : seul ce qu'on AJOUTE est jugé. C'est un PRÉ-FILTRE 100 % adaptateur — relay-context.sh reste
 #   agnostique (§1.2) : il grep le contenu reçu sur --stdin, peu importe que ce soit le fichier ou le diff.
 #   ⚠️ Compromis SÉCURITÉ assumé (raison du choix OPT-IN, décision user 2026-06-24) : en diff-only une clé

@@ -71,6 +71,19 @@ emit_empty() {
 [ -z "$RULES_CONF" ] && emit_empty
 [ -z "$CONTENT" ] && emit_empty
 
+# ── Variante « code seul » : retire les lignes 100 %-COMMENTAIRE avant le scan des sections d'IDIOME CODE ──
+# (cf. faux positif live 2026-06-25, RELAY-NOAGENT-WIRE — un Write bloqué car un commentaire CITAIT un idiome
+# proscrit). Granularité LIGNE de l'exception prose (.md) : un commentaire qui DOCUMENTE/CITE un anti-pattern
+# n'en est pas un → le compter en deny force la réécriture d'une ligne légitime = tokens gaspillés (l'inverse
+# de la thèse RELAY, VISION §4). Est « 100 %-commentaire » une ligne dont le 1er caractère non-blanc est un
+# marqueur de commentaire — multi-langage (dièse, double-slash, slash-étoile, étoile, double-tiret, chevron-bang).
+# Décision user 2026-06-25 : lignes 100 %-commentaire UNIQUEMENT ; un commentaire en FIN de ligne de code laisse
+# la ligne entièrement scannée (quasi-zéro faux-négatif : du vrai code commence rarement une ligne par un marqueur).
+# security_forbidden reste sur le CONTENU ENTIER (une clé privée/AKIA littérale en commentaire = fuite réelle,
+# exactement comme l'exception prose).
+COMMENT_LINE_RE='^[[:space:]]*(#|//|/\*|\*|--|<!--)'
+CONTENT_CODE="$(printf '%s\n' "$CONTENT" | grep -vE "$COMMENT_LINE_RE" || true)"
+
 # ── Sections applicables selon le TYPE du fichier (--path) ─────────────────────────────────────
 # Universelles : s'appliquent à tout fichier de CODE. Design : scopées par extension (comme relay-check §8).
 # Format émis : « <section> <severity> ».
@@ -152,7 +165,12 @@ while read -r section severity; do
   for i in "${!SEC_PAT[@]}"; do
     pattern="${SEC_PAT[$i]}"; msg="${SEC_MSG[$i]}"; excl="${SEC_EXCL[$i]}"; exclpath="${SEC_EXCLPATH[$i]}"
     [ -n "$exclpath" ] && [ -n "$PATH_ARG" ] && [[ "$PATH_ARG" == *"$exclpath"* ]] && continue
-    matched="$(printf '%s\n' "$CONTENT" | grep -E -e "$pattern" 2>/dev/null || true)"
+    # security_forbidden scanne le CONTENU ENTIER (un secret en commentaire = fuite réelle) ; toute autre
+    # section (idiome code) scanne la variante sans lignes 100 %-commentaire → un commentaire qui CITE un
+    # anti-pattern ne déclenche plus de faux positif (RELAY-COMMENT-FALSEPOS, décision user 2026-06-25).
+    scan="$CONTENT"
+    [ "$section" != "security_forbidden" ] && scan="$CONTENT_CODE"
+    matched="$(printf '%s\n' "$scan" | grep -E -e "$pattern" 2>/dev/null || true)"
     if [ -n "$excl" ] && [ -n "$matched" ]; then
       matched="$(printf '%s\n' "$matched" | grep -vE -e "$excl" 2>/dev/null || true)"
     fi

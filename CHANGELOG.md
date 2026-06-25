@@ -11,6 +11,28 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.22.1] — 2026-06-25
+
+### Fixed
+- **RELAY-COMMENT-FALSEPOS — le noyau ne flague plus un anti-pattern CITÉ dans un commentaire de code.**
+  Patch du faux positif découvert **en live** (2026-06-25, session `RELAY-NOAGENT-WIRE` côté consommateur) :
+  une ligne **100 %-commentaire** dans un fichier de code/shell (`# évite l'idiome bloquant`, `// note…`)
+  qui *cite* un pattern proscrit déclenchait un `deny` → force la réécriture d'une ligne légitime = tokens
+  gaspillés, l'inverse de la thèse RELAY (`VISION §4`). C'est la **même** logique que l'exception prose
+  (`.md`/`.txt`, v1.19.1) mais à la **granularité ligne**.
+  - `relay-context.sh` construit une variante **« code seul »** (`CONTENT_CODE`) en retirant les lignes dont
+    le 1ᵉʳ caractère non-blanc est un marqueur de commentaire multi-langage (`#` `//` `/*` `*` `--` `<!--`).
+    Les sections d'**idiome code** (`forbidden_patterns`, `regression_warn`, surfaces `security_surface`/
+    `decision_surface`, `design_warn_*`) scannent cette variante ; **`security_forbidden` reste sur le contenu
+    ENTIER** (une clé privée/AKIA littérale en commentaire = fuite réelle — posture sécu inchangée).
+  - **Décision user 2026-06-25 (`AskUserQuestion`)** : lignes **100 %-commentaire UNIQUEMENT**. Un commentaire
+    en **fin** d'une ligne de code laisse la ligne entièrement scannée (quasi-zéro faux-négatif : du vrai code
+    commence rarement une ligne par un marqueur). Compromis écarté = strip des commentaires *inline* (ambigu :
+    `//` dans une string, `https://`, `#` en couleur CSS → faux-négatifs sécu).
+  - **0 dépendance harnais ajoutée** (§1.2). shellcheck CLEAN, **smoke jetable 6/6** (commentaire cité → silence ;
+    code réel → ERROR ; secret en commentaire → ERROR ; idiome en fin de ligne → scanné ; tous marqueurs ;
+    prose `.md` intacte), **repro CI vs `relay-init` réel 2/2**, assertion CI miroir ajoutée.
+
 ## [1.22.0] — 2026-06-24
 
 ### Added
