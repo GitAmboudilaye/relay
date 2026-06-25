@@ -4,6 +4,18 @@
 > « RELAY actif » validée par l'user le **2026-06-23**, à exécuter en sessions post-mise-en-production.
 > Sources : décision user 2026-06-23, `VISION.md §4` (token-discipline non négociable), `RELAY-CAPABILITIES.md`
 > (phase passive close à v1.15.0). Ce doc **fige le contrat**, il n'implémente rien.
+>
+> ## ✅ STATUT 2026-06-25 — LA COUCHE ACTIVE EST LIVRÉE ET CÂBLÉE (canonique v1.22.1)
+> Ce cadrage est **réalisé**. Les **3 adaptateurs** prévus par §1.2 sont publics **et tous branchés sur un
+> consommateur réel** (pas seulement propagés — « propagé ≠ câblé ») :
+> - **Hook Claude Code** (PreToolUse) → AgriConnect ✅ + **firing live confirmé** (a bloqué un Edit en session).
+> - **Git pre-commit / CI (no-agent)** → AgriConnect ✅ (mode `--diff-only` pour le brownfield) — câblé en (k).
+> - **Hook Cline** (PreToolUse, v3.36+) → DeepManagment ✅ — câblé en (m), 1ʳᵉ preuve de généralisation N>1.
+>
+> Métrique **token-saved** opérationnelle (`relay-tokens.sh` + ledger d'instance). Deux faux positifs trouvés
+> **par le ledger live** et corrigés au noyau : prose `.md` (v1.19.1) et ligne 100 %-commentaire dans du code
+> (v1.22.1). **Examen cross-LLM DeepSeek fait** ([`RELAY-CROSS-LLM-DEEPSEEK.md`](RELAY-CROSS-LLM-DEEPSEEK.md))
+> → preuve 4/10→5/10 + besoin neuf **R1** (garde de clôture d'état-git, roadmap §3).
 
 ---
 
@@ -80,9 +92,15 @@ humain que par un adaptateur (hook/MCP). Conventions communes (alignées sur le 
 | **RELAY-CLINE** ✅ v1.20.0 | **2ᵉ adaptateur — hook `PreToolUse` Cline** — `engine/adapters/cline/relay-precheck.sh` câble le **même** `relay-context.sh` dans Cline (v3.36+). Première preuve de **généralisation N>1** de la couche actif. ERROR→`{"cancel":true,"errorMessage"}`, WARN/INFO→`{"cancel":false,"contextModification"}`, rien→`{"cancel":false}` (ALLOW explicite). **Parité d'enforcement** (deny réel) : rectifie l'hypothèse « Cline = MCP » (les hooks Cline ont rendu MCP inutile ici). Résolution symlink-safe, FAIL-OPEN, ledger token-saved partagé. | adaptateur | RELAY-3 |
 | **RELAY-NOAGENT** ✅ v1.21.0 | **3ᵉ adaptateur — scénario SANS agent (git pre-commit / CI)** — `engine/adapters/no-agent/relay-precommit.sh` câble le **même** `relay-context.sh --strict` sur les fichiers stagés (ou le diff `RELAY_RANGE` en CI). Réalise le canal **dégradé** de §1.1 : sans contexte LLM, l'enforcement = **code de sortie** (ERROR→exit 1 bloque le commit/job ; WARN/INFO→advisory ; rien→silence). Sémantique **inverse** des adaptateurs d'agent : fail-**OPEN** outillage / fail-**CLOSED** finding (le but est de bloquer). Pur Bash (0 python3), **n'écrit PAS** le ledger (un commit humain bloqué ≠ réécriture LLM évitée). Bypass `RELAY_SKIP=1`/`--no-verify`. | adaptateur (dégradé) | RELAY-2 |
 | **RELAY-NOAGENT-DIFFONLY** ✅ v1.22.0 | **Mode diff-only (opt-in) de l'adaptateur sans-agent** — débloque le **brownfield**. `RELAY_DIFF_ONLY=1`/`--diff-only` → ne pipe au noyau que les **lignes AJOUTÉES** (`git diff -U0`, lignes `+`) au lieu du contenu entier → un `.Result`/`localhost` **légataire** dans un fichier touché mais non modifié ne bloque plus. **Pré-filtre 100 % adaptateur**, noyau intact (§1.2). **OPT-IN** car compromis sécu assumé (décision user) : un secret **préexistant** non modifié n'est plus flagué → défaut = plein-fichier ; fail-closed sur finding **neuf** préservé. | adaptateur | RELAY-NOAGENT |
+| **RELAY-COMMENT-FALSEPOS** ✅ v1.22.1 | **Patch noyau anti-faux-positif** (2ᵉ après l'exception prose `.md` v1.19.1). Une ligne **100 %-commentaire** d'un fichier code/shell qui *cite* un anti-pattern ne déclenche plus un `deny`. `relay-context.sh` construit une variante `CONTENT_CODE` (retire les lignes dont le 1ᵉʳ car. non-blanc est un marqueur `#` `//` `/*` `*` `--` `<!--`) scannée par les sections d'**idiome code** ; `security_forbidden` reste sur le contenu **entier** (secret littéral en commentaire = fuite réelle). Découvert **par le ledger live** (le hook a bloqué l'Edit du correctif). | patch noyau | RELAY-3 |
+| **RELAY-NOAGENT-WIRE** ✅ (k) | **Câblage réel** du 3ᵉ adaptateur (no-agent) dans le `.git/hooks/pre-commit` du consommateur **AgriConnect** (`RELAY_DIFF_ONLY=1`, bloquant sur finding neuf). Source trackée `docs/scripts/hooks/pre-commit`. Smoke live 4/4. « propagé ≠ câblé ». | câblage consommateur | RELAY-NOAGENT-DIFFONLY |
+| **RELAY-CLINE-WIRE** ✅ (m) | **Câblage réel** du 2ᵉ adaptateur (Cline) dans **DeepManagment** via wrapper WSL `.clinerules/hooks/PreToolUse` → `relay-precheck.sh`. Smoke live 4/4. 1ʳᵉ couche active réellement branchée hors AgriConnect. | câblage consommateur | RELAY-CLINE |
+| **R1 — garde de clôture d'état-git** 🔴 PROCHAIN | `relay-uncommitted-guard.sh` : `git status --porcelain` vide = condition de clôture (lançable en CI). Ferme le trou révélé par l'examen cross-LLM DeepSeek (produit hors-git → gate au commit inerte par omission). Feuille de route — non implémenté (décision user : la session de clôture doc ne code pas). | noyau (gate clôture) | — |
 
 **Principe de séquencement** : on livre d'abord le **noyau** (valeur même sans agent), puis on le **câble**.
-Jamais l'inverse — un adaptateur sans noyau testable n'est pas vérifiable.
+Jamais l'inverse — un adaptateur sans noyau testable n'est pas vérifiable. **Corollaire prouvé en (k)/(m)** :
+*propagé ≠ câblé* — un adaptateur copié chez un consommateur reste inerte tant que le point d'entrée que le
+harnais impose (hook `settings.json`, `.clinerules/hooks/`, `.git/hooks/`) n'est pas branché à la main.
 
 ---
 

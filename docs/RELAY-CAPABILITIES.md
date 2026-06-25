@@ -1,5 +1,40 @@
 # RELAY — État des capacités v1.x + mise à l'épreuve des rôles
 
+> ## ⏩ MISE À JOUR CLÔTURE 2026-06-25 (canonique v1.22.1) — lire en premier
+> Le corps de ce document est l'**instantané de la phase passive** (v1.15.0, daté 2026-06-20) et reste
+> exact comme **historique**. Depuis, deux choses ont changé le verdict ci-dessous :
+>
+> **1. Les rôles sont passés de « prouvés en sandbox » à « vivants en projet réel ».** Le bootstrap §3
+> (alors reporté, consommateurs à v1.4.0) **a eu lieu** : AgriConnect et DeepManagment tournent en
+> **v1.22.1**. La colonne « éprouvé en conditions réelles » du §2 — partout `❌ PAS encore` — est désormais
+> **partiellement remplie** : le hook Claude Code a **firé en session sur de vrais Edit** (deny live), le
+> gate no-agent tourne sur le pre-commit AgriConnect, le hook Cline est câblé sur DeepManagment.
+>
+> **2. La couche ACTIVE (temps-réel) a été conçue et livrée** — elle n'existait pas à v1.15.0. **3 adaptateurs
+> publics** câblent le **même noyau** (`relay-context.sh`) dans 3 canaux, sans coupler le noyau (cadrage →
+> [`RELAY-CORE-ACTIF.md`](RELAY-CORE-ACTIF.md)) :
+>
+> | Adaptateur | Canal | Sémantique d'enforcement | Câblé sur |
+> |---|---|---|---|
+> | **Claude Code** (v1.18.0) | hook `PreToolUse` | ERROR→`deny`, WARN/INFO→`additionalContext`, rien→silence | AgriConnect ✅ (firing live) |
+> | **Cline** (v1.20.0) | hook `PreToolUse` (v3.36+) | ERROR→`{"cancel":true}`, sinon `{"cancel":false}` (ALLOW explicite) | DeepManagment ✅ |
+> | **No-agent** (v1.21.0) | git pre-commit / CI | code de sortie : ERROR→exit 1 ; fail-**OPEN** outillage / fail-**CLOSED** finding | AgriConnect ✅ (`--diff-only`) |
+>
+> **+ métrique token-saved** (`relay-tokens.sh` + ledger d'instance, v1.19.0) — concrétise l'angle produit
+> `VISION §4` : token-in (~40/firing) vs token-saved (~2000/deny, contrefactuel modélisé). **+ 2 correctifs
+> noyau de faux positifs trouvés par le ledger live** : prose `.md` (v1.19.1), ligne 100 %-commentaire dans
+> du code (v1.22.1). **+ mode `--diff-only`** (v1.22.0) qui débloque le brownfield.
+>
+> **Preuve de généralisation : 4/10 → 5/10.** L'examen cross-LLM DeepSeek
+> ([`RELAY-CROSS-LLM-DEEPSEEK.md`](RELAY-CROSS-LLM-DEEPSEEK.md)) prouve la **portabilité** du protocole à un
+> LLM non-Claude (format + MRS + archi DDD adoptés sans coaching) mais casse la thèse « le passif compense la
+> discipline » (produit hors-git → gate au commit inerte). Le chiffre §6 ci-dessous (« 4/10 ») est donc
+> **remplacé par 5/10** ; le besoin neuf **R1** (garde d'état-git en clôture) est inscrit à la feuille de route.
+> **Caveat** : l'examen DeepSeek ne portait que sur le **passif** (hook actif câblé après) → l'avant/après
+> actif reste à mesurer.
+>
+> ---
+>
 > **Référence non propagée** (remplace l'ancienne évaluation v1.7, retirée du dépôt public).
 > But : cartographier honnêtement **les 5 rôles que RELAY prétend jouer** au canonique **v1.15.0**,
 > et **distinguer ce qui est prouvé mécaniquement de ce qui reste à éprouver en conditions réelles**

@@ -341,10 +341,17 @@ Cette décision doit être prise avant la publication, avec son propre ancrage s
 
 **Note globale honnête :**
 - Qualité intrinsèque du protocole comme artefact : **7.5/10**
-- Preuve de généralisation (N=1 projet, N=1 développeur) : **4/10**
+- Preuve de généralisation : **5/10** *(2026-06-25 — relevée de 4/10 par l'examen cross-LLM DeepSeek, voir ci-dessous)*
 
-### Ce qui ferait passer la preuve de 4/10 à 7/10
-Un second développeur utilise `relay-init.sh` + `RELAY_PROTOCOL.md` sur un projet différent sans coaching. Après 5 sessions, son `NEXT_SESSION.md` est conforme ET les tâches planifiées en session 1 correspondent à ce qui a été fait en session 5. Le projet RH avec DeepSeek est ce second test.
+### Preuve de généralisation 4/10 → 5/10 — l'examen cross-LLM DeepSeek (2026-06-25)
+Le second test annoncé (« le projet RH avec DeepSeek ») **a eu lieu** : ~23 sessions Cline+DeepSeek sur le repo RH `DeepManagment`, examinées en croisant **les logs (écrits par DeepSeek) contre le git réel** — méthode et verdict complets dans [`RELAY-CROSS-LLM-DEEPSEEK.md`](RELAY-CROSS-LLM-DEEPSEEK.md).
+
+- **Ce qui monte le score (portabilité prouvée)** : DeepSeek, **sans coaching**, adopte le format `NEXT_SESSION.md`, exécute le MRS, et produit une vraie architecture DDD/Strangler Fig. Le protocole **se transmet** à un LLM non-Claude — c'est le fait neuf qui justifie +1.
+- **Ce qui plafonne à 5 et pas 7 (thèse cassée)** : « ne pas croire le log sur parole » a révélé que `GPEntreprises.API/` n'a **jamais été committé** alors que ~10 sessions le déclaraient « fait » (57 fichiers untracked). Le gate `relay-check` **ne mord qu'au commit** → rendu **inerte par omission**, sans même un `--no-verify`. La thèse « l'enforcement passif compense la discipline » **ne tient pas** : un LLM peut produire hors-git et le gate ne le voit jamais.
+- **Caveat décisif** : le hook **actif** Cline n'a été câblé que le 2026-06-25 (après ces sessions) → cet examen ne teste que la couche **passive**. Le cas DeepSeek est donc le **meilleur argument empirique POUR la couche active** et fait émerger un besoin neuf : une **garde de clôture d'état-git** (R1, feuille de route §12).
+
+### Ce qui ferait passer la preuve de 5/10 à 7/10
+Mesurer un **avant/après hook actif** sur un LLM non-Claude (la couche active était absente du test DeepSeek) ; et qu'un développeur **tiers** (pas l'auteur) tienne 5 sessions conformes sans coaching. Tant que l'auteur reste le seul opérateur, le plafond structurel est ~5-6.
 
 ### Les limites architecturales non réductibles
 1. **Enforcement in-session** — RELAY ne peut pas forcer le LLM pendant qu'il travaille. MRS, ANCRAGE, règle 70% s'appliquent avant le premier `git add`. Repose sur la discipline du LLM en cours de session.
@@ -355,18 +362,20 @@ Un second développeur utilise `relay-init.sh` + `RELAY_PROTOCOL.md` sur un proj
 
 ## 12. Feuille de route priorisée
 
-### Priorité 1 — AgriConnect en production (en cours)
-- CORR-P1-IDOR-BATCH2/3/4
-- FLUTTER-FIXES-AUDIT
-- SMTP-MVPFinal
-- Tests fonctionnels bout en bout
-- Déploiement Palier 1 (Tailscale fermé)
+> **Mise à jour clôture 2026-06-25.** Deux jalons majeurs depuis la v1.15.0 :
+> 1. **La couche « RELAY actif » est LIVRÉE et câblée** (canonique **v1.22.1**) — 3 adaptateurs temps-réel publics, **tous branchés sur un consommateur réel** : hook Claude Code + git pre-commit/CI (no-agent) → AgriConnect ; hook Cline → DeepManagment. Détail → [`RELAY-CORE-ACTIF.md`](RELAY-CORE-ACTIF.md) + [`RELAY-CAPABILITIES.md`](RELAY-CAPABILITIES.md).
+> 2. **L'examen cross-LLM DeepSeek est fait** (preuve 4/10→5/10, §11). Il a fait émerger **R1** (ci-dessous).
 
-### Priorité 2 — Second projet pilote (projet RH)
-- Appliquer RELAY sur projet existant avec dette technique
-- Tester avec DeepSeek comme LLM alternatif
-- Documenter les adaptations nécessaires
-- Valider la portabilité multi-stack et multi-LLM
+### Priorité 1 — AgriConnect en production ✅ FAIT
+Prod alignée au code local (PROD-UPGRADE, 3 surfaces), domaine `ecoagriconnect.com` LIVE (TLS, Azure B1), marque EcoAgriConnect/VraiKilo/AgriScore déployée. Reste = décisions user (paiement, query-filter, lancement) — hors RELAY.
+
+### Priorité 2 — Second projet pilote (projet RH) ✅ FAIT (partiel)
+- RELAY appliqué sur projet existant à dette technique (`DeepManagment`/GPEntreprises) ✅
+- Testé avec **DeepSeek** comme LLM alternatif (via Cline) ✅ — examen cross-LLM fait (§11, [`RELAY-CROSS-LLM-DEEPSEEK.md`](RELAY-CROSS-LLM-DEEPSEEK.md))
+- **Verdict** : portabilité du protocole prouvée ; thèse « l'enforcement passif compense la discipline » cassée → motive la couche active. **Reste** : mesurer l'avant/après **hook actif** sous DeepSeek (le test n'a porté que sur le passif).
+
+### Priorité 2bis — R1 : garde de clôture d'état-git 🔴 PROCHAIN (issu de l'examen DeepSeek)
+Le trou révélé chez DeepSeek (produit hors-git → gate au commit inerte par omission) appelle un garde-fou neuf : **`git status --porcelain` vide = condition de clôture**, outillé par un `relay-uncommitted-guard.sh` lançable aussi en CI. Ferme exactement ce trou : un LLM ne peut plus déclarer « fait » en laissant 57 fichiers untracked. Arbitré à coder dans une session dédiée (pas la clôture doc). Réf. R1 de `RELAY-CROSS-LLM-DEEPSEEK.md`.
 
 ### Priorité 3 — RELAY-ANTI-INFLATION (après AgriConnect)
 - Remplacer règle "1 amélioration obligatoire" par "1 amélioration OU 1 retrait"

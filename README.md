@@ -4,13 +4,15 @@
 > **sans mémoire partagée** — de travailler sur un même projet brownfield comme une équipe stable :
 > reprendre l'état réel, ne rien casser, ne pas réinventer, laisser le projet repartable en < 10 min.
 
-État : **v1.15.0** · **5 rôles mécanisés** (cybersécurité · chef de projet · architecte connaissance ·
-auditeur qualité · scrum master — voir [Les 5 rôles](#les-5-rôles-mécanisés-garde-fous-exécutables)) ·
+État : **v1.22.1** · **5 rôles mécanisés** (couche **passive**, garde-fous au commit — cybersécurité · chef
+de projet · architecte connaissance · auditeur qualité · scrum master) **+ une couche ACTIVE temps-réel**
+(3 adaptateurs qui injectent le contexte *avant* l'écriture — voir [La couche active](#la-couche-active-temps-réel-shift-left)) ·
 éprouvé en continu sur **2 projets** du même auteur (AgriConnect, où RELAY est né, et Tempow/DeepManagment)
 \+ **agnosticité de stack prouvée par exécution** (sandbox Python) · moteur portable, **pur** (zéro donnée
 projet en dur) et **auto-distribué** (Update Advisor avec consentement).
-**Lucidité** : les 5 rôles sont **prouvés mécaniquement** (smoke-tests déterministes, sandbox) — **pas encore
-éprouvés en conditions réelles** sur un projet tiers. Lis **[Forces & Limites](#forces--limites-lecture-honnête)** avant de te faire une idée.
+**Lucidité** : les rôles passifs tournent désormais **en projet réel** (3 adaptateurs câblés, firing live
+observé) ; la **portabilité cross-LLM** est passée de revendiquée à **partiellement prouvée** (examen
+DeepSeek, preuve de généralisation **5/10**). Lis **[Forces & Limites](#forces--limites-lecture-honnête)** avant de te faire une idée.
 
 ---
 
@@ -63,6 +65,28 @@ un **protocole d'ouverture/clôture** + des **garde-fous exécutables** (`relay-
 > le gate sécu Couche 1 (qui **bloque**). Les patterns/marqueurs vivent dans `rules.conf` (instance) → adaptables
 > à ta stack, jamais écrasés par une mise à jour.
 
+## La couche active (temps-réel, shift-left)
+
+> Depuis v1.18, RELAY ne se contente plus de **bloquer au commit** (a posteriori = code déjà écrit = tokens à
+> réécrire). Il injecte le contexte/la règle pertinents **avant l'écriture**, via des **adaptateurs** qui
+> appellent le **même noyau** (`relay-context.sh`) et placent sa sortie là où l'agent la voit. Cadrage complet →
+> [`docs/RELAY-CORE-ACTIF.md`](docs/RELAY-CORE-ACTIF.md).
+
+| Canal | Adaptateur | Comment ça enforce | Depuis |
+|---|---|---|---|
+| **Claude Code** | hook `PreToolUse` (`settings.json`) | ERROR→`deny`, WARN/INFO→`additionalContext`, rien→silence | v1.18 |
+| **Cline** | hook `PreToolUse` (v3.36+) | ERROR→`{"cancel":true}`, sinon ALLOW explicite | v1.20 |
+| **Sans agent** | git pre-commit / CI | code de sortie : ERROR→exit 1 ; fail-**open** outillage / fail-**closed** finding | v1.21 |
+
+- **Noyau jamais couplé à un harnais** : un adaptateur peut disparaître sans toucher le noyau (c'est ce qui
+  garde RELAY portable). Un adaptateur Cline a prouvé la **généralisation N>1** de cette couche.
+- **Économie de tokens chiffrée** : `relay-tokens.sh` lit un ledger d'instance et oppose **token-in**
+  (~40/injection) à **token-saved** (~2000/réécriture évitée, contrefactuel modélisé — jamais inventé).
+- **Faux positifs durcis par les données runtime** : le ledger live a révélé puis fait corriger 2 faux
+  positifs au noyau (prose `.md`, ligne 100 %-commentaire dans du code).
+- **Brownfield** : mode `--diff-only` (no-agent) ne juge que les **lignes ajoutées** → le code légataire ne
+  bloque pas.
+
 ## Démarrage rapide
 
 ### Installer RELAY sur un **nouveau** projet (bootstrap)
@@ -110,7 +134,8 @@ Le protocole complet (MRS, règle des 70 %, format des tâches, clôture) → `d
 ```
 relay/
 ├── engine/
-│   ├── scripts/   # relay-check, relay-brief, relay-stats, relay-forecast, stale-detector, relay-split, audit
+│   ├── scripts/   # relay-check, relay-brief, relay-stats, relay-forecast, relay-scan, relay-context, relay-tokens, ...
+│   ├── adapters/  # couche ACTIVE : claude-code/ (hook) · cline/ (hook) · no-agent/ (pre-commit/CI) — câblent relay-context.sh
 │   └── rules/     # RELAY_PROTOCOL.md  (§0-§7 portables, §8 = pointeur statique)
 ├── templates/     # graines des fichiers d'instance ({{PLACEHOLDERS}})
 ├── bin/           # relay-init.sh (bootstrap) · relay-update.sh (propagation)
@@ -149,11 +174,14 @@ relay/
   (CHANGELOG) avant d'appliquer avec consentement — la distribution n'est plus un copier-coller à l'aveugle.
 
 **Limites (à connaître pour ne pas surpromettre) :**
-- 🟠 **« LLM-agnostique » est REVENDIQUÉ, pas (encore) prouvé comportementalement.** RELAY n'a tourné en
-  session réelle **qu'avec Claude**. Un audit d'agnosticité *statique* existe (`docs/AGNOSTIC-SMOKE-TEST.md` :
-  zéro dépendance à un fournisseur dans le moteur), mais **aucune session agentique réelle sous
-  GPT/Gemini/DeepSeek** — **prévue après la stabilisation d'AgriConnect**. La portabilité multi-LLM reste
-  une hypothèse outillée, pas un fait. → la contribution la plus utile (voir CONTRIBUTING).
+- 🟠 **« LLM-agnostique » est PARTIELLEMENT prouvé (2026-06-25), pas encore complet.** RELAY a maintenant
+  tourné en session réelle sous **DeepSeek** (via Cline, projet RH `DeepManagment`) : ~23 sessions examinées
+  en croisant logs vs git réel (`docs/RELAY-CROSS-LLM-DEEPSEEK.md`). **Acquis** : le protocole se transmet
+  (format, MRS, archi DDD adoptés **sans coaching**) → portabilité réelle. **Limite restante** : ces sessions
+  n'ont testé que la couche **passive** (le hook actif Cline a été câblé après) ; et le passif s'est révélé
+  **contournable par omission** (produit hors-git → gate au commit jamais déclenché). La portabilité de la
+  couche **active** sous un LLM non-Claude reste à mesurer (avant/après). → la contribution la plus utile
+  (voir CONTRIBUTING).
 - 🟠 **N=2 projets, même auteur ; cross-stack prouvé en *sandbox*, pas en projet réel.** Éprouvé en continu
   sur 2 projets du même auteur (ASP.NET + Flutter). L'**agnosticité de stack** est désormais prouvée *par
   exécution reproductible* sur un bac à sable Python/FastAPI (le moteur n'impose aucune règle .NET/Flutter ;
@@ -176,12 +204,12 @@ relay/
   + la porte de reçu apportent une preuve mécanique sur `[verified-run]` ; l'auto-déclenchement par hooks
   reste hors core — voir backlog T1, volontairement non livré car spécifique à Claude Code, donc en tension
   avec l'agnosticité revendiquée.)*
-- 🟠 **Les 5 rôles (v1.8→v1.15) sont prouvés *mécaniquement*, pas *en conditions réelles*.** Chacun passe
-  un smoke-test déterministe (sandbox), mais aucun n'a encore tourné sur un **projet tiers multi-sessions** :
-  un déclencheur peut être trop étroit (faux négatif) ou trop large (faux positif) sur un vrai diff. La
-  généralisation reste une **hypothèse outillée** — la mise à l'épreuve terrain démarre sur les projets de
-  l'auteur (détail → [`docs/RELAY-CAPABILITIES.md`](docs/RELAY-CAPABILITIES.md)).
-- ⚪ **Jeune (v1.15), bash + Markdown, français-centré.** Le modèle de propagation a mûri (Update Advisor +
+- 🟠 **Les rôles tournent maintenant en projet réel, mais N reste = l'auteur.** Le bootstrap a eu lieu :
+  AgriConnect + DeepManagment sont à **v1.22.1**, le hook actif a **firé en session sur de vrais Edit** (deny
+  live), et le ledger runtime a même révélé 2 faux positifs corrigés au noyau. Ce qui manque encore : un
+  **développeur tiers** (pas l'auteur) qui tient 5 sessions conformes sans coaching, et l'avant/après de la
+  couche **active** sous un LLM non-Claude (détail → [`docs/RELAY-CAPABILITIES.md`](docs/RELAY-CAPABILITIES.md)).
+- ⚪ **Jeune (v1.22), bash + Markdown, français-centré.** Le modèle de propagation a mûri (Update Advisor +
   self-update + CHANGELOG + migrations `rules.conf` idempotentes) mais reste récent ; angles connus dans le
   backlog. i18n absente.
 
@@ -200,7 +228,7 @@ mention de copyright, fourni « tel quel » sans garantie.
 ## `docs/.relay-version` (manifeste d'instance)
 
 ```
-1.15.0
+1.22.1
 PROJECT=MonProjet
 CANONICAL_URL=https://github.com/GitAmboudilaye/relay.git
 INSTALLED=2026-06-12
