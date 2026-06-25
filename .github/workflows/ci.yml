@@ -172,4 +172,30 @@ jobs:
             | ./docs/scripts/relay-context.sh --path=Foo.cs --stdin --strict > /dev/null; then
             echo "::error::le MÊME idiome sur une VRAIE ligne de code DOIT bloquer (exit 3)"; exit 1
           fi
-          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) + forecast (RELAY-FORECAST) + scan (RELAY-1) + context (RELAY-2) + hook-adapter (RELAY-3) + cline-adapter (RELAY-CLINE) + tokens (RELAY-TOKENS) + noagent-adapter (RELAY-NOAGENT) + noagent-diffonly (RELAY-NOAGENT-DIFFONLY) + comment-falsepos (RELAY-COMMENT-FALSEPOS) OK"
+          # R1-UNCOMMITTED-GUARD (Core actif) : la garde de clôture d'état-git est propagée + exécutable,
+          # et applique la sémantique fail-OPEN outillage / fail-CLOSED finding. On la teste dans un repo
+          # git ISOLÉ (mktemp) pour ne pas dépendre de l'état d'arbre du fixture bootstrap :
+          #   (a) arbre propre → exit 0 (condition de clôture remplie) ;
+          #   (b) fichier untracked (le trou DeepSeek : produit hors-git) → exit 1 (BLOQUE par défaut) ;
+          #   (c) le même untracked avec --warn → exit 0 (signal-only, adoption progressive) ;
+          #   (d) hors d'un repo git → exit 0 (fail-open outillage, ne casse jamais l'environnement).
+          [ -x docs/scripts/relay-uncommitted-guard.sh ] \
+            || { echo "::error::docs/scripts/relay-uncommitted-guard.sh absent/non exécutable après relay-init (R1)"; exit 1; }
+          GUARD_ABS="$PWD/docs/scripts/relay-uncommitted-guard.sh"
+          GT=$(mktemp -d)
+          git -C "$GT" init -q
+          git -C "$GT" config user.email ci@ci.ci && git -C "$GT" config user.name ci
+          echo base > "$GT/f.txt" && git -C "$GT" add f.txt && git -C "$GT" commit -q -m init
+          ( cd "$GT" && "$GUARD_ABS" >/dev/null ) \
+            || { echo "::error::relay-uncommitted-guard doit exit-0 sur un arbre propre (R1)"; exit 1; }
+          echo orphan > "$GT/untracked.txt"
+          if ( cd "$GT" && "$GUARD_ABS" >/dev/null 2>&1 ); then
+            echo "::error::relay-uncommitted-guard doit exit-1 (BLOQUER) sur un fichier untracked (trou DeepSeek, R1)"; exit 1
+          fi
+          ( cd "$GT" && "$GUARD_ABS" --warn >/dev/null ) \
+            || { echo "::error::relay-uncommitted-guard --warn doit exit-0 (signal-only) même sur un arbre sale (R1)"; exit 1; }
+          GNG=$(mktemp -d)
+          ( cd "$GNG" && "$GUARD_ABS" >/dev/null ) \
+            || { echo "::error::relay-uncommitted-guard doit exit-0 hors d'un repo git (fail-open outillage, R1)"; exit 1; }
+          rm -rf "$GT" "$GNG"
+          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) + forecast (RELAY-FORECAST) + scan (RELAY-1) + context (RELAY-2) + hook-adapter (RELAY-3) + cline-adapter (RELAY-CLINE) + tokens (RELAY-TOKENS) + noagent-adapter (RELAY-NOAGENT) + noagent-diffonly (RELAY-NOAGENT-DIFFONLY) + comment-falsepos (RELAY-COMMENT-FALSEPOS) + uncommitted-guard (R1) OK"

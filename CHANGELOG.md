@@ -11,6 +11,28 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.23.0] — 2026-06-25
+
+### Added
+- **R1 — `relay-uncommitted-guard.sh` : garde de clôture d'état-git.** Nouveau script **moteur** (couche
+  active), issu de l'examen cross-LLM DeepSeek (`VISION §11`, `RELAY-CORE-ACTIF §3`). Ferme un trou de la
+  couche **passive** : un LLM peut déclarer une tâche « faite » en laissant le produit **hors-git**
+  (fichiers untracked jamais `git add`és) → le gate `relay-check` ne mord qu'au commit, donc **inerte par
+  omission**. Le garde impose la règle inverse : **« `git status --porcelain` vide = condition de clôture »**,
+  lançable aussi en **CI** (indépendant de la discipline du LLM).
+  - **Portée (décision user `AskUserQuestion`)** : **porcelain LITTÉRAL** — untracked **+** modifiés **+**
+    stagés non committés déclenchent tous (clôture = absolument tout committé). Les fichiers **gitignorés**
+    (ex. `docs/session_logs/` internes) sont **nativement exclus** par porcelain → aucun faux positif sur
+    l'interne.
+  - **Sémantique (décision user `AskUserQuestion`)** : **BLOQUANT par défaut** (`exit 1` — c'est un gate de
+    clôture) ; `--warn` = signal-only (`exit 0` + liste, adoption progressive/brownfield) ; `--json` pour
+    l'outillage. **FAIL-OPEN absolu sur l'outillage** (hors d'un repo git ou `git` absent → `exit 0` : ne
+    jamais casser un environnement) / **FAIL-CLOSED sur le finding** (arbre sale → `exit 1`). Pur Bash,
+    offline-safe.
+  - Propagé aux consommateurs via `relay-init` (`engine/scripts/*.sh`, aucun manifeste à éditer). Step CI
+    miroir (présent+exécutable après bootstrap ; propre→0 / untracked→1 / `--warn`→0 / hors-git→0).
+    shellcheck CLEAN, smoke 9/9, repro CI bootstrap OK.
+
 ## [1.22.1] — 2026-06-25
 
 ### Fixed

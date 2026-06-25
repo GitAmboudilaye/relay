@@ -4,7 +4,7 @@
 > **sans mémoire partagée** — de travailler sur un même projet brownfield comme une équipe stable :
 > reprendre l'état réel, ne rien casser, ne pas réinventer, laisser le projet repartable en < 10 min.
 
-État : **v1.22.1** · **5 rôles mécanisés** (couche **passive**, garde-fous au commit — cybersécurité · chef
+État : **v1.23.0** · **5 rôles mécanisés** (couche **passive**, garde-fous au commit — cybersécurité · chef
 de projet · architecte connaissance · auditeur qualité · scrum master) **+ une couche ACTIVE temps-réel**
 (3 adaptateurs qui injectent le contexte *avant* l'écriture — voir [La couche active](#la-couche-active-temps-réel-shift-left)) ·
 éprouvé en continu sur **2 projets** du même auteur (AgriConnect, où RELAY est né, et Tempow/DeepManagment)
@@ -134,7 +134,7 @@ Le protocole complet (MRS, règle des 70 %, format des tâches, clôture) → `d
 ```
 relay/
 ├── engine/
-│   ├── scripts/   # relay-check, relay-brief, relay-stats, relay-forecast, relay-scan, relay-context, relay-tokens, ...
+│   ├── scripts/   # relay-check, relay-brief, relay-stats, relay-forecast, relay-scan, relay-context, relay-tokens, relay-uncommitted-guard, ...
 │   ├── adapters/  # couche ACTIVE : claude-code/ (hook) · cline/ (hook) · no-agent/ (pre-commit/CI) — câblent relay-context.sh
 │   └── rules/     # RELAY_PROTOCOL.md  (§0-§7 portables, §8 = pointeur statique)
 ├── templates/     # graines des fichiers d'instance ({{PLACEHOLDERS}})
@@ -205,11 +205,11 @@ relay/
   reste hors core — voir backlog T1, volontairement non livré car spécifique à Claude Code, donc en tension
   avec l'agnosticité revendiquée.)*
 - 🟠 **Les rôles tournent maintenant en projet réel, mais N reste = l'auteur.** Le bootstrap a eu lieu :
-  AgriConnect + DeepManagment sont à **v1.22.1**, le hook actif a **firé en session sur de vrais Edit** (deny
+  AgriConnect + DeepManagment sont à **v1.22.1** (canonique **v1.23.0**), le hook actif a **firé en session sur de vrais Edit** (deny
   live), et le ledger runtime a même révélé 2 faux positifs corrigés au noyau. Ce qui manque encore : un
   **développeur tiers** (pas l'auteur) qui tient 5 sessions conformes sans coaching, et l'avant/après de la
   couche **active** sous un LLM non-Claude (détail → [`docs/RELAY-CAPABILITIES.md`](docs/RELAY-CAPABILITIES.md)).
-- ⚪ **Jeune (v1.22), bash + Markdown, français-centré.** Le modèle de propagation a mûri (Update Advisor +
+- ⚪ **Jeune (v1.23), bash + Markdown, français-centré.** Le modèle de propagation a mûri (Update Advisor +
   self-update + CHANGELOG + migrations `rules.conf` idempotentes) mais reste récent ; angles connus dans le
   backlog. i18n absente.
 
@@ -228,7 +228,7 @@ mention de copyright, fourni « tel quel » sans garantie.
 ## `docs/.relay-version` (manifeste d'instance)
 
 ```
-1.22.1
+1.23.0
 PROJECT=MonProjet
 CANONICAL_URL=https://github.com/GitAmboudilaye/relay.git
 INSTALLED=2026-06-12
