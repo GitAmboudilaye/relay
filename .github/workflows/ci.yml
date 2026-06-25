@@ -43,9 +43,11 @@ jobs:
           # relay-check doit s'exécuter et produire un Health Score (sans --strict → exit 0 attendu).
           ./docs/scripts/relay-check.sh > out.txt 2>&1 || true
           grep -q "Health Score" out.txt || { echo "::error::relay-check n'a pas produit de Health Score"; cat out.txt; exit 1; }
-          # Aucun placeholder {{...}} ne doit subsister après le bootstrap.
-          if grep -rl '{{' . --include='*.md' | grep -v out.txt; then
-            echo "::error::placeholder {{...}} non substitué après relay-init"; exit 1
+          # Aucun placeholder RELAY {{UPPER_SNAKE}} ne doit subsister après le bootstrap.
+          # Précis : ne matche QUE la convention relay (majuscules+underscore, ex. {{PROJECT_NAME}}),
+          # pas les expressions GitHub Actions ${{ github.* }} / {{ secrets.* }} citées dans les docs d'adaptateurs.
+          if grep -rlE '\{\{[A-Z_]+\}\}' . --include='*.md' | grep -v out.txt; then
+            echo "::error::placeholder relay {{UPPER_SNAKE}} non substitué après relay-init"; exit 1
           fi
           # SEC-3 : relay-init doit déposer le workflow CI RELAY, et ce doit être un YAML valide.
           WF=".github/workflows/relay-ci.yml"
