@@ -6,9 +6,24 @@
 >
 > **1. Les rôles sont passés de « prouvés en sandbox » à « vivants en projet réel ».** Le bootstrap §3
 > (alors reporté, consommateurs à v1.4.0) **a eu lieu** : AgriConnect et DeepManagment tournent en
-> **v1.22.1**. La colonne « éprouvé en conditions réelles » du §2 — partout `❌ PAS encore` — est désormais
-> **partiellement remplie** : le hook Claude Code a **firé en session sur de vrais Edit** (deny live), le
-> gate no-agent tourne sur le pre-commit AgriConnect, le hook Cline est câblé sur DeepManagment.
+> **v1.23.0**. La colonne « éprouvé en conditions réelles » du §2 — partout `❌ PAS encore` à l'époque de
+> l'instantané (consommateurs à v1.4.0) — est **fausse aujourd'hui** et corrigée ci-dessous. Deux faits :
+>
+> > **(a) Les 5 rôles PASSIFS s'exécutent sur de vrais commits.** Le `.git/hooks/pre-commit` d'AgriConnect
+> > lance **`relay-check.sh --strict`** (qui porte `§9` SEC-1, `§10` SCOPE-1, `§11` DECISION-TRIGGER,
+> > `§12` QUAL-1) sur tout commit touchant du `.cs/.dart`. Depuis la propagation, cela représente
+> > **46 commits `.cs`** (sur 102) — épic comptable, PROD-UPGRADE, DS-PAGES… : le gate des 5 rôles a donc
+> > tourné **en conditions réelles**, pas en sandbox. **Nuance honnête** : sur du code surtout propre il a
+> > surtout tourné **en silence** (sain) — « exécuté sur de vrais diffs » ✅ ≠ « a attrapé une régression
+> > réelle à répétition » (cela, mince, et surtout côté actif ci-dessous).
+> >
+> > **(b) La couche ACTIVE a firé sur du réel** : le hook Claude Code a **deny en live** sur de vrais Edit,
+> > le gate no-agent tourne sur le pre-commit AgriConnect, le hook Cline est câblé sur DeepManagment — et
+> > c'est le ledger live de l'actif qui a **trouvé 2 faux positifs** corrigés au noyau (v1.19.1, v1.22.1).
+>
+> **Ce qui reste légitimement `❌` n'est PAS l'exécution terrain, mais la généralisation** : un dev **tiers**
+> (pas l'auteur) et/ou un **2ᵉ stack** qui tiennent N sessions conformes. C'est ça le plafond ~5-6/10 (§6),
+> distinct de « le gate tourne-t-il sur du vrai code » (oui).
 >
 > **2. La couche ACTIVE (temps-réel) a été conçue et livrée** — elle n'existait pas à v1.15.0. **3 adaptateurs
 > publics** câblent le **même noyau** (`relay-context.sh`) dans 3 canaux, sans coupler le noyau (cadrage →
@@ -47,6 +62,10 @@
 ---
 
 ## 0. Le cadre honnête
+
+> ⚠️ **Instantané v1.15.0 (2026-06-20) — le « Aucun rôle exécuté sur un vrai diff » ci-dessous est PÉRIMÉ.**
+> Le bootstrap a eu lieu depuis ; les 5 rôles tournent sur **46 commits `.cs`** AgriConnect réels (voir
+> bandeau de tête + §2). Conservé comme historique de la phase passive.
 
 RELAY a livré, en deux jours de sessions (v1.8.0 → v1.15.0), les **4 items de la Priorité 5**
 (`VISION §383-387`) **plus** un rôle Spécialiste cybersécurité complet (4 couches) qui n'était même pas
@@ -88,20 +107,30 @@ restés à **v1.4.0** (cf. §3). C'est la limite centrale que ce document refuse
 
 C'est la réponse directe à « **mettre à l'épreuve les rôles** ». Pour chaque rôle, deux niveaux distincts :
 
-| Rôle | Prouvé mécaniquement (smoke / sandbox / `[verified-run]`) | Éprouvé en conditions réelles (vrai diff d'un vrai projet) |
-|---|---|---|
-| Cybersécurité (SEC-1→4) | ✅ FAIT (5 reçus + 13/0 + 9/0) | ❌ **PAS encore** — jamais exécuté sur un commit AgriConnect/Tempow |
-| Chef de projet (SCOPE-1 + FORECAST) | ✅ FAIT (10/10 + 21/21) | ❌ **PAS encore** — jamais sur un backlog `TASK[]` réel d'un consommateur |
-| Scrum Master / Release Eng. | ✅ FAIT (3 reçus T6) | ⚠️ **partiel** — le moteur s'auto-release (vérifiable sur ce repo), mais l'enforcement n'a pas tourné sur un consommateur à jour |
-| Auditeur qualité (QUAL-1) | ✅ FAIT (12/0) | ❌ **PAS encore** |
-| Architecte connaissance (§11) | ✅ FAIT (13/0) | ❌ **PAS encore** |
+> **⚠️ Table mise à jour 2026-06-25** : la colonne de droite reflétait l'instantané v1.4.0 (rien propagé,
+> tout `❌`). Depuis la propagation, le pre-commit AgriConnect lance `relay-check --strict` (les 5 rôles)
+> sur **46 commits `.cs`** réels → l'exécution terrain est **acquise** ; ce qui reste `❌` = le **tiers / 2ᵉ stack**.
 
-> **Conclusion §346 — la preuve de généralisation reste à 4/10.** La preuve **mécanique** par rôle est
-> forte (smoke déterministes, reçus durables, CI verte) ; elle prouve que **le code fait ce qu'il dit en
-> sandbox**. Elle ne prouve **pas** la généralisation, qui exige un run sur du travail réel (idéalement
-> un 2ᵉ dev / 2ᵉ stack, `§346`). Le chiffre global `§344` (4/10) **ne bouge donc pas** tant que le
-> bootstrap (§3) n'a pas eu lieu. Les scores per-rôle ci-dessus sont **tous marqués « (preuve mécanique) »**
-> pour cette raison — ils montent quand le terrain les confirme, pas avant.
+| Rôle | Prouvé mécaniquement (smoke / sandbox / `[verified-run]`) | Exécuté en conditions réelles (vrai diff d'un vrai projet) | Généralisé (dev tiers / 2ᵉ stack) |
+|---|---|---|---|
+| Cybersécurité (SEC-1→4) | ✅ FAIT (5 reçus + 13/0 + 9/0) | ✅ **OUI** — SEC-1 gate sur 46 commits `.cs` AgriConnect (surtout silencieux, code propre) | ❌ pas encore |
+| Chef de projet (SCOPE-1 + FORECAST) | ✅ FAIT (10/10 + 21/21) | ✅ **OUI** — SCOPE-1 lit le vrai backlog `TASK[]` à chaque `relay-check` | ❌ pas encore |
+| Scrum Master / Release Eng. | ✅ FAIT (3 reçus T6) | ✅ **OUI** — gate `relay-check` au commit sur consommateurs à jour + moteur s'auto-release | ❌ pas encore (tiers) |
+| Auditeur qualité (QUAL-1) | ✅ FAIT (12/0) | ✅ **OUI** — `§12` exécuté au commit (silencieux : peu de régressions réelles) | ❌ pas encore |
+| Architecte connaissance (§11) | ✅ FAIT (13/0) | ✅ **OUI** — `§11` exécuté au commit (silencieux : surfaces structurelles rarement touchées) | ❌ pas encore |
+
+> **Conclusion §346 — mise à jour 2026-06-25 : preuve de généralisation 4/10 → 5/10.** Trois niveaux,
+> désormais distincts :
+> 1. **Mécanique** (le code fait ce qu'il dit en sandbox) : ✅ fort — smoke déterministes, reçus durables, CI verte.
+> 2. **Exécution terrain** (le gate tourne sur de vrais commits) : ✅ **acquise** — le bootstrap (§3) a eu
+>    lieu, `relay-check --strict` tourne sur 46 commits `.cs` AgriConnect + la couche active a firé en live.
+>    *Nuance* : surtout silencieux (code propre) → exécuté ≠ « a attrapé du réel à répétition ».
+> 3. **Généralisation** (un dev **tiers** / un **2ᵉ stack** qui tiennent N sessions sans coaching) : ❌ **toujours
+>    pas** — c'est *ça* le plafond. L'examen cross-LLM DeepSeek (portabilité du protocole prouvée, §banner)
+>    monte le chiffre à **5/10** ; tant que l'auteur reste le seul opérateur, le plafond structurel est ~5-6.
+>
+> Les scores per-rôle du §1 restent marqués « (preuve mécanique) » : ils intègrent la mécanique + l'exécution
+> terrain, mais **ne franchissent pas** la généralisation tierce — c'est ce dernier niveau qui les ferait monter.
 
 ---
 
