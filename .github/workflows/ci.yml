@@ -118,4 +118,22 @@ jobs:
             || { echo "::error::relay-tokens.sh n'est pas exit-0 (doit être informatif pur, jamais un gate)"; exit 1; }
           ./docs/scripts/relay-tokens.sh --json | grep -q '"firings": 0' \
             || { echo "::error::relay-tokens.sh doit afficher firings=0 sans ledger (pas de chiffre inventé)"; exit 1; }
-          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) + forecast (RELAY-FORECAST) + scan (RELAY-1) + context (RELAY-2) + hook-adapter (RELAY-3) + cline-adapter (RELAY-CLINE) + tokens (RELAY-TOKENS) OK"
+          # RELAY-NOAGENT (Core actif) : le 3ᵉ adaptateur (git pre-commit / CI, scénario SANS agent) est
+          # propagé + exécutable, et applique la sémantique fail-OPEN outillage / fail-CLOSED finding :
+          #   (a) un contenu stagé PROPRE → exit 0 (ne bloque jamais à tort) ;
+          #   (b) un pattern PROSCRIT stagé → exit 1 (BLOQUE — c'est tout l'intérêt du canal dégradé).
+          [ -x docs/adapters/no-agent/relay-precommit.sh ] \
+            || { echo "::error::docs/adapters/no-agent/relay-precommit.sh absent/non exécutable après relay-init (RELAY-NOAGENT)"; exit 1; }
+          printf 'public class Ok { void M(){} }\n' > Clean.cs && git add Clean.cs
+          RELAY_CONTEXT_BIN="$PWD/docs/scripts/relay-context.sh" docs/adapters/no-agent/relay-precommit.sh \
+            || { echo "::error::relay-precommit.sh doit exit-0 sur un contenu stagé propre (fail-open)"; exit 1; }
+          git rm -q --cached Clean.cs && rm -f Clean.cs
+          # [security_forbidden] est ACTIF par défaut dans le rules.conf du template (AKIA…, clé privée) —
+          # ERROR quasi-zéro-faux-positif. On stage un fichier de code avec une clé AWS littérale et on
+          # exige exit 1 (le canal dégradé DOIT bloquer un secret commité).
+          printf 'const k = "AKIAIOSFODNN7EXAMPLE";\n' > leak.js && git add leak.js
+          if RELAY_CONTEXT_BIN="$PWD/docs/scripts/relay-context.sh" docs/adapters/no-agent/relay-precommit.sh; then
+            echo "::error::relay-precommit.sh doit exit-1 (BLOQUER) sur un pattern PROSCRIT stagé (fail-closed sur finding)"; exit 1
+          fi
+          git rm -q --cached leak.js && rm -f leak.js
+          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) + forecast (RELAY-FORECAST) + scan (RELAY-1) + context (RELAY-2) + hook-adapter (RELAY-3) + cline-adapter (RELAY-CLINE) + tokens (RELAY-TOKENS) + noagent-adapter (RELAY-NOAGENT) OK"
