@@ -136,4 +136,25 @@ jobs:
             echo "::error::relay-precommit.sh doit exit-1 (BLOQUER) sur un pattern PROSCRIT stagé (fail-closed sur finding)"; exit 1
           fi
           git rm -q --cached leak.js && rm -f leak.js
-          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) + forecast (RELAY-FORECAST) + scan (RELAY-1) + context (RELAY-2) + hook-adapter (RELAY-3) + cline-adapter (RELAY-CLINE) + tokens (RELAY-TOKENS) + noagent-adapter (RELAY-NOAGENT) OK"
+          # RELAY-NOAGENT-DIFFONLY (Core actif) : le mode OPT-IN diff-only (RELAY_DIFF_ONLY/--diff-only) ne
+          # juge que les LIGNES AJOUTÉES → débloque le brownfield. On le prouve avec le SEUL pattern actif
+          # du template (security_forbidden / AKIA), via un fichier déjà committé qui CONTIENT le secret :
+          #   (a) on ajoute une ligne PROPRE → diff-only exit 0 (secret PRÉEXISTANT non touché, ignoré) ;
+          #       le DÉFAUT plein-fichier, lui, BLOQUE toujours (posture sécu inchangée — raison de l'opt-in) ;
+          #   (b) on ajoute une NOUVELLE ligne avec un secret → diff-only exit 1 (fail-closed sur finding neuf).
+          # --no-verify : on monte un fixture BROWNFIELD (secret déjà committé) ; le hook relay-check
+          # déposé par relay-init bloquerait ce commit de setup — ce n'est pas lui qu'on teste ici.
+          printf 'const legacy = "AKIAIOSFODNN7EXAMPLE";\n' > brown.js && git add brown.js
+          git commit -q --no-verify -m "brownfield: secret légataire"
+          printf 'const legacy = "AKIAIOSFODNN7EXAMPLE";\nconst clean = 1;\n' > brown.js && git add brown.js
+          if RELAY_CONTEXT_BIN="$PWD/docs/scripts/relay-context.sh" docs/adapters/no-agent/relay-precommit.sh; then
+            echo "::error::défaut plein-fichier doit BLOQUER un secret PRÉEXISTANT dans un fichier touché (posture sécu)"; exit 1
+          fi
+          RELAY_DIFF_ONLY=1 RELAY_CONTEXT_BIN="$PWD/docs/scripts/relay-context.sh" docs/adapters/no-agent/relay-precommit.sh \
+            || { echo "::error::diff-only doit exit-0 quand on n'ajoute qu'une ligne propre (secret préexistant ignoré)"; exit 1; }
+          printf 'const legacy = "AKIAIOSFODNN7EXAMPLE";\nconst clean = 1;\nconst neu = "AKIAIOSFODNN7EXAMPLE";\n' > brown.js && git add brown.js
+          if RELAY_DIFF_ONLY=1 RELAY_CONTEXT_BIN="$PWD/docs/scripts/relay-context.sh" docs/adapters/no-agent/relay-precommit.sh; then
+            echo "::error::diff-only doit exit-1 (BLOQUER) sur un secret AJOUTÉ (fail-closed sur finding neuf)"; exit 1
+          fi
+          git rm -q --cached brown.js && rm -f brown.js
+          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) + forecast (RELAY-FORECAST) + scan (RELAY-1) + context (RELAY-2) + hook-adapter (RELAY-3) + cline-adapter (RELAY-CLINE) + tokens (RELAY-TOKENS) + noagent-adapter (RELAY-NOAGENT) + noagent-diffonly (RELAY-NOAGENT-DIFFONLY) OK"

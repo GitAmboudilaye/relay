@@ -11,6 +11,25 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.22.0] — 2026-06-24
+
+### Added
+- **RELAY-NOAGENT-DIFFONLY — mode diff-only (opt-in) de l'adaptateur sans-agent** : débloque le
+  **brownfield**. Par défaut, `relay-precommit.sh` juge le **contenu entier** du fichier touché → sur un
+  dépôt légataire, éditer un fichier qui contient *déjà* un pattern proscrit (`.Result`/`localhost:7285`
+  historique) bloque le commit même quand on n'a pas touché cette ligne. Avec `RELAY_DIFF_ONLY=1` (env)
+  ou `--diff-only` (flag), seules les **lignes AJOUTÉES** (`git diff -U0`, lignes `+`, préfixe retiré)
+  sont pipées au noyau → seul ce qu'on ajoute est jugé. Les deux modes (pre-commit et range/CI) le
+  respectent.
+  - **Pré-filtre 100 % adaptateur** : `relay-context.sh` reste agnostique (§1.2) — il grep le contenu reçu
+    sur `--stdin`, qu'il vienne du fichier ou du diff. **0 ligne de noyau touchée.**
+  - **Compromis sécurité assumé → OPT-IN** (décision user 2026-06-24, `AskUserQuestion`) : en diff-only, un
+    secret **préexistant** (AKIA/clé privée) dans un fichier touché mais non modifié n'est plus flagué. Le
+    **défaut** reste donc le scan plein-fichier (greenfield/CI stricte inchangés). Le fail-closed sur un
+    finding **neuf** (pattern ajouté) est préservé dans les deux modes.
+  - shellcheck CLEAN, smoke jetable **11/11**, repro CI contre un vrai `relay-init` **3/3**, CI canonique
+    étendue (miroir du bloc no-agent, via le pattern actif `security_forbidden`/AKIA).
+
 ## [1.21.0] — 2026-06-24
 
 ### Added

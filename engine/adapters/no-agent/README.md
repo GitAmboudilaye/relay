@@ -26,6 +26,27 @@ Il câble le **même** noyau agnostique `relay-context.sh` — 0 couplage, comme
 | **pre-commit** (défaut) | aucun env | stagés (`git diff --cached --diff-filter=ACMR`) | **blob d'index** (`git show :file`) = ce qui va être committé |
 | **CI / range** | `RELAY_RANGE` défini (ex. `origin/main...HEAD`) | diff de la plage | **arbre courant** (le checkout CI est sur la pointe) |
 
+### Mode diff-only (opt-in) — pour le brownfield
+
+Par défaut, l'adaptateur juge le **contenu entier** du fichier touché. Sur un dépôt **légataire**, cela
+bloque dès qu'on édite un fichier qui contient *déjà* un pattern proscrit (ex. un `.Result`/`localhost:7285`
+historique) — même si on n'a pas touché à cette ligne. Le mode **diff-only** ne fait juger que les
+**lignes AJOUTÉES** (`git diff -U0`, lignes `+`, préfixe retiré), donc seul **ce qu'on ajoute** compte.
+
+| Activation | Effet |
+|---|---|
+| `RELAY_DIFF_ONLY=1` (env) **ou** `--diff-only` (flag) | ne pipe au noyau que les lignes ajoutées des fichiers touchés (les deux modes pre-commit et range le respectent). |
+| *(rien — défaut)* | contenu entier — posture sécurité maximale. |
+
+C'est un **pré-filtre 100 % adaptateur** : `relay-context.sh` reste agnostique (§1.2), il grep le contenu
+reçu sur `--stdin` qu'il provienne du fichier ou du diff.
+
+> **⚠️ Compromis sécurité (raison de l'OPT-IN, décision user 2026-06-24).** En diff-only, une clé AKIA /
+> un secret **préexistant** dans un fichier touché mais **non modifié** n'est plus flagué. Le **défaut**
+> reste donc le scan plein-fichier : greenfield et CI stricte ne changent rien ; le brownfield active
+> explicitement le mode et accepte ce compromis. Le fail-closed sur un finding **neuf** (pattern ajouté)
+> est, lui, **préservé** dans les deux modes.
+
 ## La différence structurante : fail-OPEN sur l'outillage, fail-CLOSED sur le finding
 
 Les adaptateurs d'**agent** (`relay-hook.sh`, `relay-precheck.sh`) sont **purement fail-open** : un hook
