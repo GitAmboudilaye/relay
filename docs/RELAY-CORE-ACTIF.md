@@ -14,7 +14,7 @@
 >
 > Métrique **token-saved** opérationnelle (`relay-tokens.sh` + ledger d'instance). Deux faux positifs trouvés
 > **par le ledger live** et corrigés au noyau : prose `.md` (v1.19.1) et ligne 100 %-commentaire dans du code
-> (v1.22.1). **Examen cross-LLM DeepSeek fait** ([`RELAY-CROSS-LLM-DEEPSEEK.md`](RELAY-CROSS-LLM-DEEPSEEK.md))
+> (v1.22.1). **Examen cross-LLM DeepSeek fait** (examen interne, non publié)
 > → preuve 4/10→5/10 + besoin neuf **R1** (garde de clôture d'état-git, roadmap §3).
 
 ---

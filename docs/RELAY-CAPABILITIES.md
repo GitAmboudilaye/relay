@@ -26,7 +26,7 @@
 > du code (v1.22.1). **+ mode `--diff-only`** (v1.22.0) qui débloque le brownfield.
 >
 > **Preuve de généralisation : 4/10 → 5/10.** L'examen cross-LLM DeepSeek
-> ([`RELAY-CROSS-LLM-DEEPSEEK.md`](RELAY-CROSS-LLM-DEEPSEEK.md)) prouve la **portabilité** du protocole à un
+> (examen interne, non publié) prouve la **portabilité** du protocole à un
 > LLM non-Claude (format + MRS + archi DDD adoptés sans coaching) mais casse la thèse « le passif compense la
 > discipline » (produit hors-git → gate au commit inerte). Le chiffre §6 ci-dessous (« 4/10 ») est donc
 > **remplacé par 5/10** ; le besoin neuf **R1** (garde d'état-git en clôture) est inscrit à la feuille de route.

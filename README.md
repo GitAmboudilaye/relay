@@ -175,8 +175,8 @@ relay/
 
 **Limites (à connaître pour ne pas surpromettre) :**
 - 🟠 **« LLM-agnostique » est PARTIELLEMENT prouvé (2026-06-25), pas encore complet.** RELAY a maintenant
-  tourné en session réelle sous **DeepSeek** (via Cline, projet RH `DeepManagment`) : ~23 sessions examinées
-  en croisant logs vs git réel (`docs/RELAY-CROSS-LLM-DEEPSEEK.md`). **Acquis** : le protocole se transmet
+  tourné en session réelle sous **DeepSeek** (via Cline) sur un projet RH brownfield : un lot de sessions
+  examinées en croisant logs vs git réel (examen interne). **Acquis** : le protocole se transmet
   (format, MRS, archi DDD adoptés **sans coaching**) → portabilité réelle. **Limite restante** : ces sessions
   n'ont testé que la couche **passive** (le hook actif Cline a été câblé après) ; et le passif s'est révélé
   **contournable par omission** (produit hors-git → gate au commit jamais déclenché). La portabilité de la

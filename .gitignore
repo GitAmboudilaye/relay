@@ -1,8 +1,11 @@
-# Matériel éditorial / diffusion — hors dépôt public (préservé en local ~/relay-private)
+# Matériel éditorial / diffusion — hors dépôt public (préservé en local)
 docs/ARTICLE-DRAFT.md
 docs/ARTICLE-EN.md
 docs/LINKEDIN-POST.md
 docs/LINKEDIN-POST-FR.md
 docs/RELAY-EVALUATION-v1.7.md
-docs/session_briefs/NEXT_ARTICLES-PUBLICATION.md
-docs/session_logs/2026-06-19_ARTICLES-PUBLICATION-v1.7.md
+
+# Documents de session — internes, jamais sur le git public (préservés en local)
+docs/session_logs/
+docs/session_briefs/
+docs/RELAY-CROSS-LLM-DEEPSEEK.md
