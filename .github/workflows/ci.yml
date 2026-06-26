@@ -198,4 +198,35 @@ jobs:
           ( cd "$GNG" && "$GUARD_ABS" >/dev/null ) \
             || { echo "::error::relay-uncommitted-guard doit exit-0 hors d'un repo git (fail-open outillage, R1)"; exit 1; }
           rm -rf "$GT" "$GNG"
-          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) + forecast (RELAY-FORECAST) + scan (RELAY-1) + context (RELAY-2) + hook-adapter (RELAY-3) + cline-adapter (RELAY-CLINE) + tokens (RELAY-TOKENS) + noagent-adapter (RELAY-NOAGENT) + noagent-diffonly (RELAY-NOAGENT-DIFFONLY) + comment-falsepos (RELAY-COMMENT-FALSEPOS) + uncommitted-guard (R1) OK"
+          # RELAY-CLAIM-GUARD (R1bis) : auditeur « déclaré-vs-committé », ferme le trou que R1 ne ferme
+          # PAS en CI (un checkout GitHub est toujours propre → R1 en CI = faux-vert). R1bis lit ce que
+          # NEXT_SESSION déclare « fait » et asserte via git ls-files sur HEAD → indépendant de l'arbre de
+          # travail. Repo git ISOLÉ (mktemp) :
+          #   (a) claim committé → 0 finding, exit 0 (même --strict) ;
+          #   (b) claim absent (trou « produit hors-git ») → exit 1 en --strict (BLOQUE) ;
+          #   (c) même cas en défaut → exit 0 (signal-only, heuristique → adoption sûre) ;
+          #   (d) hors d'un repo git → exit 0 (fail-open outillage).
+          [ -x docs/scripts/relay-claim-guard.sh ] \
+            || { echo "::error::docs/scripts/relay-claim-guard.sh absent/non exécutable après relay-init (R1bis)"; exit 1; }
+          CLAIM_ABS="$PWD/docs/scripts/relay-claim-guard.sh"
+          CT=$(mktemp -d)
+          git -C "$CT" init -q
+          git -C "$CT" config user.email ci@ci.ci && git -C "$CT" config user.name ci
+          mkdir -p "$CT/src"
+          echo real > "$CT/src/Done.cs"
+          printf '%s\n' '~~TASK[A]~~ ✅ livré `src/Done.cs`' > "$CT/NEXT_SESSION.md"
+          git -C "$CT" add -A && git -C "$CT" commit -q -m init
+          ( cd "$CT" && "$CLAIM_ABS" --strict >/dev/null ) \
+            || { echo "::error::relay-claim-guard doit exit-0 quand tout claim est committé (R1bis)"; exit 1; }
+          printf '%s\n' '~~TASK[B]~~ ✅ fait `src/Ghost.cs`' >> "$CT/NEXT_SESSION.md"
+          git -C "$CT" add NEXT_SESSION.md && git -C "$CT" commit -q -m claim-only
+          if ( cd "$CT" && "$CLAIM_ABS" --strict >/dev/null 2>&1 ); then
+            echo "::error::relay-claim-guard --strict doit exit-1 sur un chemin déclaré jamais committé (trou DeepSeek, R1bis)"; exit 1
+          fi
+          ( cd "$CT" && "$CLAIM_ABS" >/dev/null ) \
+            || { echo "::error::relay-claim-guard en défaut doit exit-0 (signal-only) même avec un finding (R1bis)"; exit 1; }
+          CNG=$(mktemp -d)
+          ( cd "$CNG" && "$CLAIM_ABS" --strict >/dev/null ) \
+            || { echo "::error::relay-claim-guard doit exit-0 hors d'un repo git (fail-open outillage, R1bis)"; exit 1; }
+          rm -rf "$CT" "$CNG"
+          echo "✅ bootstrap + relay-check + CI (SEC-3) + ancrage sélectif (SEC-2) + pattern memory (SEC-4) + scope-creep (SCOPE-1) + decision-trigger (§11) + regression-pattern-memory (§12) + forecast (RELAY-FORECAST) + scan (RELAY-1) + context (RELAY-2) + hook-adapter (RELAY-3) + cline-adapter (RELAY-CLINE) + tokens (RELAY-TOKENS) + noagent-adapter (RELAY-NOAGENT) + noagent-diffonly (RELAY-NOAGENT-DIFFONLY) + comment-falsepos (RELAY-COMMENT-FALSEPOS) + uncommitted-guard (R1) + claim-guard (R1bis) OK"

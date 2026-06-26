@@ -4,7 +4,7 @@
 > **sans mémoire partagée** — de travailler sur un même projet brownfield comme une équipe stable :
 > reprendre l'état réel, ne rien casser, ne pas réinventer, laisser le projet repartable en < 10 min.
 
-État : **v1.24.0** · **5 rôles mécanisés** (couche **passive**, garde-fous au commit — cybersécurité · chef
+État : **v1.25.0** · **5 rôles mécanisés** (couche **passive**, garde-fous au commit — cybersécurité · chef
 de projet · architecte connaissance · auditeur qualité · scrum master) **+ une couche ACTIVE temps-réel**
 (3 adaptateurs qui injectent le contexte *avant* l'écriture — voir [La couche active](#la-couche-active-temps-réel-shift-left)) ·
 éprouvé en continu sur **2 projets** du même auteur (AgriConnect, où RELAY est né, et Tempow/DeepManagment)
@@ -134,7 +134,7 @@ Le protocole complet (MRS, règle des 70 %, format des tâches, clôture) → `d
 ```
 relay/
 ├── engine/
-│   ├── scripts/   # relay-check, relay-brief, relay-stats, relay-forecast, relay-scan, relay-context, relay-tokens, relay-uncommitted-guard, ...
+│   ├── scripts/   # relay-check, relay-brief, relay-stats, relay-forecast, relay-scan, relay-context, relay-tokens, relay-uncommitted-guard, relay-claim-guard, ...
 │   ├── adapters/  # couche ACTIVE : claude-code/ (hook) · cline/ (hook) · no-agent/ (pre-commit/CI) — câblent relay-context.sh
 │   └── rules/     # RELAY_PROTOCOL.md  (§0-§7 portables, §8 = pointeur statique)
 ├── templates/     # graines des fichiers d'instance ({{PLACEHOLDERS}})

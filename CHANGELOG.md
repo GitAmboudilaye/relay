@@ -11,6 +11,33 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.25.0] — 2026-06-25
+
+### Added
+- **RELAY-CLAIM-GUARD (R1bis) — auditeur « déclaré-vs-committé », lançable en CI** (`engine/scripts/relay-claim-guard.sh`).
+  Ferme **réellement** le trou « produit hors-git » que R1 (`relay-uncommitted-guard.sh`) ne ferme **pas en CI** :
+  un checkout GitHub Actions est **toujours propre** (`git status --porcelain` vide), donc R1 en CI = **faux-vert** ;
+  le travail jamais committé reste local et n'atteint jamais le dépôt. R1bis opère sur l'arbre **committé** (HEAD) :
+  il lit ce que `NEXT_SESSION` déclare « fait/livré » et asserte via `git ls-files` que chaque **chemin déclaré**
+  existe dans l'arbre committé. Absent = « déclaré fait, jamais committé ». Indépendant de l'arbre de travail →
+  marche en CI, indépendant du LLM. Reproduit le cas réel observé : un répertoire déclaré « créé » → `git ls-files` vide.
+  - **Source des claims (décision user)** : `NEXT_SESSION.md` seul (là où vit le smoking gun ; surface réduite = moins de faux-rouge).
+  - **« Chemin déclaré » (décision user — coeur anti-faux-rouge)** : token backtick sur une ligne à marqueur DONE
+    (`✅` / `~~barré~~` / `status=done` / `fait` / `livré`), ressemblant à un chemin (contient `/` **ou** une extension
+    de code) ET **hors** formes ref-git/URL/version (`origin/…`, `feature/…` sans extension, `://`, `vX.Y.Z`, ranges `..`).
+    Acceptation **étroite** : un livrable = **répertoire** (slash final) **ou** **fichier** (extension de code) ;
+    `word/word` sans extension ni slash final = prose ambiguë → rejet. Filtres anti-bruit : globs, `.git/`, **gitignorés**
+    (non-committés par design).
+  - **Sévérité (décision user)** : **`--warn` par défaut** (signal-only — R1bis est *heuristique*, à la différence de R1
+    déterministe → un faux-rouge ne doit pas casser une CI légitime), **`--strict`** pour opt-in bloquant (exit 1), `--json`.
+    **Fail-OPEN** absolu sur l'outillage (hors repo git, git absent, pas de `NEXT_SESSION`).
+  - **Limite inhérente documentée** : R1bis suppose que `NEXT_SESSION` décrit le repo où il vit ; un `NEXT_SESSION` « hôte »
+    qui pilote du travail committé dans un **autre** repo sur-flague (un chemin cross-repo est indistinguable d'un livrable
+    jamais committé) → câbler R1bis sur le repo dont le `NEXT_SESSION` décrit **son propre** travail.
+  - Pur Bash, project-agnostic (pureté moteur 0 identité), propagé via `relay-init` (0 manifeste), **step CI miroir**,
+    **shellcheck CLEAN**, smoke fixtures **7/7**, acceptance sur un vrai `NEXT_SESSION` consommateur (18/18 vrais positifs,
+    0 faux), repro bootstrap `relay-init` 4/4.
+
 ## [1.24.0] — 2026-06-25
 
 ### Changed
