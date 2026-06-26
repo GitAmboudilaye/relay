@@ -11,6 +11,25 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.25.1] — 2026-06-26
+
+### Fixed
+- **Adaptateur Cline (`engine/adapters/cline/relay-precheck.sh`) — anti-freeze : un hook `PreToolUse` ne
+  doit JAMAIS geler l'éditeur.** Bug terrain remonté par un consommateur : Cline se figeait « souvent » en
+  cours de session, **aucune action possible**, obligeant à fermer VS Code (= sessions perdues / mal
+  enregistrées). Cause : `STDIN_JSON="$(cat)"` lit stdin **jusqu'à EOF** — si le harnais n'envoie pas /
+  ne ferme pas stdin pour certains outils (typiquement les outils **non-écriture**), `cat` attend
+  indéfiniment, et **aucun timeout** ne bornait non plus les appels au noyau. L'adaptateur viole alors son
+  propre principe (« un garde-fou qui casse l'éditeur est pire que pas de garde-fou »).
+  - **Correctif** : lecture stdin et appels à `relay-context.sh` **bornés par un timeout DUR** (`run_bounded`,
+    défaut **4 s**, surchargeable via `RELAY_HOOK_TIMEOUT`) → tout dépassement = **fail-open (`{"cancel": false}`)**.
+    Un blocage devient au pire un court délai puis ALLOW, jamais un gel. `timeout` absent → exécution non
+    bornée (on ne dégrade pas un env sans l'outil). shellcheck CLEAN ; testé : stdin sans EOF → allow en
+    ~4 s (vs gel) ; non-régression deny réel / contenu propre / JSON cassé / outil non-écriture (~100 ms).
+  - **Wrapper recommandé (défense en profondeur)** : envelopper l'adaptateur d'un second timeout (interne+2 s)
+    avec repli `{"cancel": false}` sur dépassement/échec/sortie vide — couvre tout blocage hors adaptateur
+    (git, python, FS). Appliqué au consommateur câblé (DeepManagment).
+
 ## [1.25.0] — 2026-06-25
 
 ### Added
