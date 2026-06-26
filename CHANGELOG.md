@@ -11,6 +11,35 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.24.0] — 2026-06-25
+
+### Changed
+- **RELAY-PAYLOAD-ENRICH — enrichir la *charge utile* de l'injection live, pas le nombre de règles.**
+  Constat (injecteur testé en live) : la *pertinence* est bonne (déclenchement chemin+contenu, silence
+  sur code propre), mais la *richesse* d'un deny vaut exactement le `msg=` de la règle déclenchée — et
+  beaucoup de patterns sont **nus** : un `.Result` proscrit injectait la **regex nue** (`relay-context.sh`
+  émet `${msg:-${pattern}}`) → deny opaque, ni *pourquoi* ni *fix*. **0 règle ajoutée, 0 code moteur**
+  (`msg=` est déjà rendu génériquement par le noyau) — c'est une amélioration de **donnée** du seed
+  `templates/docs/.relay/rules.conf`. Décisions user (`AskUserQuestion`) : ordre = PAYLOAD-ENRICH d'abord ;
+  mécanisme levier 2 = **`msg=` enrichi inline** (donnée, token-borné) plutôt qu'extraction de fichier au
+  firing (cohérent `VISION §4` token-optimal).
+  - **Levier 1 — `[forbidden_patterns]` pédagogiques.** Les exemples du seed passent de la forme
+    « regex + commentaire `#` de fin de ligne » (avalé par `exclude=` au décommentage → `msg=` vide) à la
+    forme **`<regex> | msg=<pourquoi + fix>`** (ex. `.Result bloquant en contexte async — deadlock ; utiliser await`).
+    En-tête de format mis à jour : « donnez TOUJOURS un `msg=` ». Corrige un **bug pédagogique** (le seed
+    enseignait un format dont le deny live est aveugle).
+  - **Levier 2 — surfaces (`[security_surface]`/`[decision_surface]`) : étiquette → snippet.** Les `msg=`
+    passent d'une **étiquette** nue (`authZ (IDOR)`) à un **snippet ciblé 1-ligne** = le check le plus
+    important de la catégorie **+ le `§ref`** vers la checklist complète (`SECURITY_RULES.md §N` / tracer
+    en `DEC-`). L'étiquette devient **connaissance** sans injecter tout le fichier (token-borné, levier 3).
+  - **Validation** : dogfood `relay-context.sh` 4/4 — `.Result` → deny pédagogique ; code propre → silence ;
+    fichier auth → surfaces enrichies ; `context.Result =` → silence (exclusion préservée). Charge ~40 tok/firing.
+  - **Limite découverte (candidat moteur, non corrigé ici)** : la `rules.conf` elle-même — méta-fichier qui
+    *liste* ses patterns — est scannée comme du **code** par les adaptateurs (hook PreToolUse + pre-commit
+    no-agent), donc éditer la `rules.conf` d'un consommateur **déclenche ses propres `[forbidden_patterns]`
+    en `deny`** (faux positif méta, distinct des cas `.md`/commentaire déjà traités). Contournement : édition
+    hors-Edit / `--no-verify`. → piste : exclure `docs/.relay/rules.conf` du scan-code (couche moteur, future tâche).
+
 ## [1.23.0] — 2026-06-25
 
 ### Added
