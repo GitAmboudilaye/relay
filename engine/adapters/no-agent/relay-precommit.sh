@@ -98,6 +98,30 @@ else
 fi
 [ -z "$FILES" ] && exit 0   # rien à vérifier
 
+# ── 2b. Discipline de branche (R2) — refuser un commit DIRECT sur main/develop ─────────────────────
+# PRE-COMMIT UNIQUEMENT (jamais en CI/range : la CI checkout légitimement main). Le pre-commit ne fire
+# pas sur les merges → seuls les commits directs sont bloqués. Opt-out : RELAY_BRANCH_WARN=1 (signal-only),
+# RELAY_BRANCH_SKIP=1 (désactiver ce seul contrôle). Garde introuvable → on n'ajoute rien (fail-open).
+if [ "$MODE" = "precommit" ]; then
+  case "${RELAY_BRANCH_SKIP:-}" in
+    1|true|yes|on) : ;;
+    *)
+      BRANCH_GUARD=""
+      for cand in "${SELF:-}/../../scripts/relay-branch-guard.sh" \
+                  "${ROOT:+$ROOT/docs/scripts/relay-branch-guard.sh}" \
+                  "${ROOT:+$ROOT/engine/scripts/relay-branch-guard.sh}"; do
+        [ -n "$cand" ] && [ -x "$cand" ] && BRANCH_GUARD="$cand" && break
+      done
+      if [ -n "$BRANCH_GUARD" ]; then
+        case "${RELAY_BRANCH_WARN:-}" in
+          1|true|yes|on) "$BRANCH_GUARD" --warn || exit 1 ;;
+          *)             "$BRANCH_GUARD"        || exit 1 ;;
+        esac
+      fi
+    ;;
+  esac
+fi
+
 # ── 3. Pour chaque fichier : piper le contenu PROPOSÉ au noyau (--strict) et agréger ───────────────
 ERR_FILES=0
 ADVISORY=""

@@ -11,6 +11,42 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.26.0] — 2026-07-17
+
+### Fixed
+- **Regression Shield §7 (tier BLOQUANT `[forbidden_patterns]`) silencieusement INERTE — parseur ne gérait
+  pas `| msg=`.** Découvert par reproduction empirique (harnais) : le tier qui BLOQUE les patterns proscrits
+  ne matchait **plus aucun** pattern (`.Result` deadlock, `.Include().Select()`, accents Dart, `logout.*GET`…).
+  Cause : le parseur de `relay-check.sh §7` ne coupait la ligne que sur `| exclude=`. Quand `| msg=` a été
+  seedé dans `rules.conf` (v1.4.0+), le texte du `msg=` restait **collé à la regex** et le `|` devenait une
+  **alternation ERE** → pattern malformé, jamais matché → **bouclier bloquant inerte chez tous les
+  consommateurs** depuis cette régression.
+  - **Correctif** : tokeniser `[forbidden_patterns]` sur `|` (champs `msg=`/`exclude=`/`exclude-path=`, ordre
+    libre) — **grammaire unifiée** avec le §9 (`parse_security_section`). Bonus : `msg=` désormais **affiché**
+    dans l'erreur (au lieu de la regex brute) ; `exclude=` enfin **effectif** ; `exclude-path=` disponible sur
+    `[forbidden_patterns]` ; `grep -E -e` (patterns commençant par `-`). Validé en harnais : vrais positifs
+    bloquent de nouveau, exclusions excusent, édition de `rules.conf` ne bloque pas.
+- **`relay-claim-guard.sh` (R1bis) — faux positif chemin-partiel/suffixe.** `path_committed()` cas `*/*` était
+  ancré racine (`git ls-files -- "$p"`) → un chemin déclaré PARTIEL (`scripts/x.sh`) alors que le fichier
+  committé est `docs/scripts/x.sh` était signalé **absent à tort** (le cas nom-nu tolérait déjà le suffixe).
+  Correctif : repli suffixe ancré sur `/` (`git ls-files -- "*/$p"`). Non-régression vérifiée (un livrable
+  jamais committé reste détecté).
+
+### Added
+- **`relay-branch-guard.sh` (R2) — garde de discipline de branche.** Refuse un commit **direct** sur une
+  branche protégée (défaut `main develop master`, override `RELAY_PROTECTED_BRANCHES`). Pair de R1
+  (uncommitted) / R1bis (claim) : pur Bash, **BLOQUANT** par défaut (`--warn` signal-only, `--json`),
+  fail-open outillage (hors repo, HEAD détachée, **merge/rebase/cherry-pick en cours**). Le pre-commit ne
+  fire pas sur les merges → un `merge --no-ff feature` sur `develop` passe ; seul le commit direct est bloqué
+  (E2E prouvé). Câblé dans l'adaptateur no-agent (`relay-precommit.sh`, pre-commit uniquement — jamais en
+  CI/range ; opt-out `RELAY_BRANCH_WARN`/`RELAY_BRANCH_SKIP`) → propagé aux 3 consommateurs. Règle identique
+  quel que soit le stack → **généralisable (preuve N>1)**. shellcheck clean.
+
+### Notes
+- **FP-1 (rules.conf « s'auto-bloque »)** : NON reproductible sur le canonique — `rules.conf` (ext `.conf`)
+  n'est pas dans les extensions de code du §7, et le §9 l'exclut explicitement. Déjà résolu ; conservé au
+  titre de la non-régression (édition de `rules.conf` testée = ne bloque pas).
+
 ## [1.25.1] — 2026-06-26
 
 ### Fixed
