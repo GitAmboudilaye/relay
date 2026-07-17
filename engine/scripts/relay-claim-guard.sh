@@ -125,7 +125,12 @@ path_committed() {
   local p="${1%/}"   # retire un éventuel slash final
   case "$1" in
     */) git ls-files --error-unmatch -- "$p/*" >/dev/null 2>&1 ;;   # répertoire déclaré
-    */*) git ls-files --error-unmatch -- "$p" >/dev/null 2>&1 || git ls-files --error-unmatch -- "$p/*" >/dev/null 2>&1 ;;
+    # Chemin avec « / » : racine-ancré, OU répertoire, OU suffixe ancré sur un « / » (FP-3 v1.26.0 :
+    # un chemin PARTIEL comme « scripts/x.sh » alors que le fichier committé est « docs/scripts/x.sh »
+    # était déclaré absent à tort — le cas nom-nu tolérait déjà le suffixe, pas le cas « */* »).
+    */*) git ls-files --error-unmatch -- "$p" >/dev/null 2>&1 \
+         || git ls-files --error-unmatch -- "$p/*" >/dev/null 2>&1 \
+         || git ls-files --error-unmatch -- "*/$p" >/dev/null 2>&1 ;;
     *)  git ls-files --error-unmatch -- "*$p" >/dev/null 2>&1 ;;     # nom de fichier nu → match en fin de chemin
   esac
 }
