@@ -11,6 +11,20 @@ Chaque bump de `VERSION` doit ajouter une entrée ici (étape de clôture — `R
 
 ## [Non publié]
 
+## [1.26.1] — 2026-07-17
+
+### Fixed
+- **branch-guard câblé dans l'adaptateur no-agent : DÉFAUT trop agressif → smoke test relay-init cassé +
+  greenfield bloqué.** v1.26.0 câblait `relay-branch-guard` en mode **bloquant** dans `relay-precommit.sh`.
+  Conséquence : un repo NEUF (ou un dev solo) sur `main`/`master` était **bloqué à son 1ᵉʳ commit** — c'est
+  exactement le cas du **smoke test `relay-init`** (bootstrap sur `master` → commit propre attendu `exit 0`),
+  qui a fait **échouer la CI canonique**.
+  - **Correctif** : dans l'adaptateur, le branch-guard tourne désormais en **`--warn` par défaut** (signal-only,
+    exit 0 — adoption-safe). Escalade **bloquante** explicite via `RELAY_BRANCH_STRICT=1` (les équipes GitFlow
+    l'activent sur leurs repos). `RELAY_BRANCH_SKIP=1` inchangé (désactive le contrôle). Le script standalone
+    `relay-branch-guard.sh` garde son défaut **bloquant** (invocation délibérée). Re-testé : master + contenu
+    propre → exit 0 ; pattern proscrit → exit 1 ; `RELAY_BRANCH_STRICT=1` → exit 1.
+
 ## [1.26.0] — 2026-07-17
 
 ### Fixed
