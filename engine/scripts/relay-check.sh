@@ -486,11 +486,17 @@ STAGED_FILES=$(git diff --cached --name-only 2>/dev/null | grep -E '\.(cs|dart|p
 RULES_CONF="docs/.relay/rules.conf"
 
 if [ -n "$STAGED_FILES" ]; then
-  # Parse rules.conf → FORBIDDEN_PATTERNS (+ PATTERN_EXCLUDE optionnel). Format plat :
-  # une regex (ERE, grep -E) par ligne sous [forbidden_patterns] ; exclusion inline
-  # optionnelle « <regex> | exclude=<regex> » ; lignes vides et « # » = ignorées.
+  # Parse rules.conf → FORBIDDEN_PATTERNS (+ msg/exclude/exclude-path optionnels). Format :
+  # une regex (ERE, grep -E) par ligne sous [forbidden_patterns], suivie de champs optionnels
+  # « | msg=<texte> | exclude=<regex contenu> | exclude-path=<fragment de chemin> » (ordre libre).
+  # FIX v1.26.0 : le parseur ne coupait QUE sur « | exclude= » → un « | msg=… » (seedé v1.4.0+)
+  # restait collé à la regex, et le « | » devenait une alternation ERE → pattern malformé, jamais
+  # matché → bouclier BLOQUANT silencieusement inerte. On tokenise désormais sur « | » comme le §9
+  # (parse_security_section), grammaire unifiée.
   FORBIDDEN_PATTERNS=()
   declare -A PATTERN_EXCLUDE=()
+  declare -A PATTERN_MSG=()
+  declare -A PATTERN_EXCLPATH=()
   RS_IN=0
   if [ -f "$RULES_CONF" ]; then
     while IFS= read -r rs_line || [ -n "$rs_line" ]; do
@@ -502,17 +508,29 @@ if [ -n "$STAGED_FILES" ]; then
         continue
       fi
       [ "$RS_IN" = "1" ] || continue
-      if [[ "$rs_line" == *" | exclude="* ]]; then
-        rs_pat="${rs_line%% | exclude=*}"
-        rs_exc="${rs_line##* | exclude=}"
-      else
-        rs_pat="$rs_line"; rs_exc=""
+      rs_pat="${rs_line%%' | '*}"                               # regex = avant le 1er « | »
+      rs_exc=""; rs_msg=""; rs_exclpath=""
+      if [[ "$rs_line" == *' | '* ]]; then
+        rs_rest="${rs_line#*' | '}"
+        while [ -n "$rs_rest" ]; do                             # champs key=value séparés par « | »
+          if [[ "$rs_rest" == *' | '* ]]; then
+            rs_tok="${rs_rest%%' | '*}"; rs_rest="${rs_rest#*' | '}"
+          else
+            rs_tok="$rs_rest"; rs_rest=""
+          fi
+          case "$rs_tok" in
+            msg=*)          rs_msg="${rs_tok#msg=}" ;;
+            exclude=*)      rs_exc="${rs_tok#exclude=}" ;;
+            exclude-path=*) rs_exclpath="${rs_tok#exclude-path=}" ;;
+          esac
+        done
       fi
       rs_pat="${rs_pat%"${rs_pat##*[![:space:]]}"}"             # rtrim pattern
-      rs_exc="${rs_exc#"${rs_exc%%[![:space:]]*}"}"; rs_exc="${rs_exc%"${rs_exc##*[![:space:]]}"}"
       [ -z "$rs_pat" ] && continue
       FORBIDDEN_PATTERNS+=("$rs_pat")
-      [ -n "$rs_exc" ] && PATTERN_EXCLUDE["$rs_pat"]="$rs_exc"
+      [ -n "$rs_exc" ]      && PATTERN_EXCLUDE["$rs_pat"]="$rs_exc"
+      [ -n "$rs_msg" ]      && PATTERN_MSG["$rs_pat"]="$rs_msg"
+      [ -n "$rs_exclpath" ] && PATTERN_EXCLPATH["$rs_pat"]="$rs_exclpath"
     done < "$RULES_CONF"
   fi
 
@@ -531,17 +549,21 @@ if [ -n "$STAGED_FILES" ]; then
     SHIELD_ERRORS=0
     for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
       EXCLUDE="${PATTERN_EXCLUDE[$pattern]:-}"
+      EXCLPATH="${PATTERN_EXCLPATH[$pattern]:-}"
+      MSG="${PATTERN_MSG[$pattern]:-}"
       while IFS= read -r staged_file; do
         [ ! -f "$staged_file" ] && continue
-        ADDED=$(git diff --cached -- "$staged_file" 2>/dev/null | grep "^+" | grep -vE "^\+\+\+" | grep -E "$pattern" 2>/dev/null || true)
+        [ -n "$EXCLPATH" ] && [[ "$staged_file" == *"$EXCLPATH"* ]] && continue   # exclusion de chemin (instance)
+        # -e "$pattern" : un pattern peut commencer par « - » → sinon grep le lit comme option
+        ADDED=$(git diff --cached -- "$staged_file" 2>/dev/null | grep "^+" | grep -vE "^\+\+\+" | grep -E -e "$pattern" 2>/dev/null || true)
         # Retirer les lignes correspondant à l'exclusion (affectation légitime) avant de compter
         if [ -n "$EXCLUDE" ] && [ -n "$ADDED" ]; then
-          ADDED=$(echo "$ADDED" | grep -vE "$EXCLUDE" 2>/dev/null || true)
+          ADDED=$(echo "$ADDED" | grep -vE -e "$EXCLUDE" 2>/dev/null || true)
         fi
-        MATCHES=$(echo "$ADDED" | grep -cE "$pattern" 2>/dev/null || true)
+        MATCHES=$(echo "$ADDED" | grep -cE -e "$pattern" 2>/dev/null || true)
         [ -z "$ADDED" ] && MATCHES=0
         if [ "$MATCHES" -gt 0 ]; then
-          $SCORE_ONLY || echo "[RELAY] ❌ Regression Shield : pattern interdit \`$pattern\` détecté dans $staged_file (+$MATCHES lignes)"
+          $SCORE_ONLY || echo "[RELAY] ❌ Regression Shield : \`$pattern\` dans $staged_file — ${MSG:-pattern interdit} (+$MATCHES lignes)"
           ERRORS=$((ERRORS + 1))
           SHIELD_ERRORS=$((SHIELD_ERRORS + 1))
         fi
